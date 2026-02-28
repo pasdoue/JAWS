@@ -171,7 +171,7 @@ class AWS_profile:
                         elif "Missing required parameter" in str(e):
                             res[service.name][function.name] = "Missing required parameter"
                         else:
-                            res[service.name][function.name] = f"Unknwon Exception : {str(e)}"
+                            res[service.name][function.name] = f"Unknown Exception : {str(e)}"
                         progress.update(progress_id, advance=1)
                         continue
                     if ret is not None:
