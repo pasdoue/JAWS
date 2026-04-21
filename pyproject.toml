@@ -19,8 +19,6 @@ dependencies = [
     "boto3",
     "botocore",
     "numpy",
-    "bs4",
-    "requests",
 ]
 dynamic = ["version"]
 requires-python = ">= 3.10"
