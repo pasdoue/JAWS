@@ -77,7 +77,7 @@ class User_config:
             logger.critical(f"{Emoji('no_entry_sign')} AWS credentials file does not exists. Configure it to launch script")
 
     @classmethod
-    def _load_config(cls, config_file_path: Path = default_config_file_path) -> Union[dict, None]:
+    def _load_config_file(cls, config_file_path: Path = default_config_file_path) -> Union[dict, None]:
         config = ConfigParser()
 
         if config_file_path.exists():
@@ -98,13 +98,18 @@ class User_config:
 
     @staticmethod
     def load(credentials_file_path: Union[Path|str] = default_credentials_file_path,
-             config_file_path: Union[Path|str] = default_config_file_path) -> dict:
+             config_file_path: Union[Path|str] = default_config_file_path,
+             region_name: str = None) -> dict:
 
         credentials_file_path = Path(credentials_file_path).expanduser() if isinstance(credentials_file_path, str) else credentials_file_path.expanduser()
         config_file_path = Path(config_file_path).expanduser() if isinstance(config_file_path, str) else config_file_path.expanduser()
 
         settings = User_config._load_credentials_file(credentials_file_path=credentials_file_path)
-        settings.update(User_config._load_config(config_file_path=config_file_path))
+
+        if region_name is not None:
+            settings["region_name"] = region_name
+        else:
+            settings.update(User_config._load_config_file(config_file_path=config_file_path))
 
         if not settings["aws_access_key_id"]:
             logger.critical("AWS access key ID not found.")
@@ -191,11 +196,11 @@ class AWS_profile:
             :param res:
             :return:
         """
-        output_folder = Path(__file__).parent / self.output_folder_name
+        output_folder = Path(__file__).parent / self.output_folder_name / self.boto_session.region_name
         output_file = output_folder / f"{service.name}.json"
 
         if not output_folder.exists():
-            output_folder.mkdir()
+            output_folder.mkdir(parents=True)
 
         output_file.write_text(json.dumps(res, indent=4, sort_keys=True, default=str))
 
