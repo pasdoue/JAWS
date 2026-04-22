@@ -75,12 +75,16 @@ options:
                         Timeout consumed before killing thread
   -u, --update-services
                         Update dynamically list of AWS services and associated functions
+  --update-regions      Update remotely list of AWS regions (official web doc of AWS)
+  -r [PARAMETER ...], --regions [PARAMETER ...]
+                        Specify regions to scan
   -b [PARAMETER ...], --black-list [PARAMETER ...]
                         List of services to remove separated by comma. Launch script with -p to see services
   -w [PARAMETER ...], --white-list [PARAMETER ...]
                         List of services to whitelist/scan separated by comma. Launch script with -p to see services
   -p, --print-services  List of all available services
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
+  -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
 ```
 
 Launch scan on all services : 
