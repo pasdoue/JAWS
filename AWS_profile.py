@@ -48,7 +48,7 @@ class User_config:
     default_config_file_path: Path = Path.home() / ".aws" / "config"
 
     @classmethod
-    def _load_credentials_file(cls, credentials_file_path: Path = default_credentials_file_path) -> Union[dict, None]:
+    def _load_credentials_file(cls, credentials_file_path: Path = default_credentials_file_path, region_name: Union[str, None] = None) -> Union[dict, None]:
         res = {}
         credentials = ConfigParser()
 
@@ -56,8 +56,8 @@ class User_config:
             credentials.read(credentials_file_path)
             cred_section = ""
             if len(credentials.sections()) > 1:
-                cred_section = Prompt.ask(prompt="Choose credentials to use : ", choices=credentials.sections(),
-                                          show_choices=True)
+                prompt = f"Choose credentials to use : " if region_name is None else f"Choose credentials to use for region ({region_name}) : "
+                cred_section = Prompt.ask(prompt=prompt, choices=credentials.sections(), show_choices=True)
             elif len(credentials.sections()) == 1:
                 cred_section = credentials.sections()[0]
             else:
@@ -77,15 +77,17 @@ class User_config:
             logger.critical(f"{Emoji('no_entry_sign')} AWS credentials file does not exists. Configure it to launch script")
 
     @classmethod
-    def _load_config(cls, config_file_path: Path = default_config_file_path) -> Union[dict, None]:
+    def _load_config_file(cls, config_file_path: Path = default_config_file_path, region_name: Union[str, None] = None) -> Union[dict, None]:
         config = ConfigParser()
+
+        if region_name is not None:
+            return {"region_name": region_name}
 
         if config_file_path.exists():
             config.read(config_file_path)
             config_section = ""
             if len(config.sections()) > 1:
-                config_section = Prompt.ask(prompt="Choose config to use : ", choices=config.sections(),
-                                            show_choices=True)
+                config_section = Prompt.ask(prompt="Choose config to use : ", choices=config.sections(), show_choices=True)
             elif len(config.sections()) == 1:
                 config_section = config.sections()[0]
             else:
@@ -98,13 +100,18 @@ class User_config:
 
     @staticmethod
     def load(credentials_file_path: Union[Path|str] = default_credentials_file_path,
-             config_file_path: Union[Path|str] = default_config_file_path) -> dict:
+             config_file_path: Union[Path|str] = default_config_file_path,
+             region_name: str = None) -> dict:
 
-        credentials_file_path = Path(credentials_file_path).expanduser() if isinstance(credentials_file_path, str) else credentials_file_path.expanduser()
-        config_file_path = Path(config_file_path).expanduser() if isinstance(config_file_path, str) else config_file_path.expanduser()
+        creds_file_path = Path(credentials_file_path).expanduser() if isinstance(credentials_file_path, str) else credentials_file_path.expanduser()
+        conf_file_path = Path(config_file_path).expanduser() if isinstance(config_file_path, str) else config_file_path.expanduser()
 
-        settings = User_config._load_credentials_file(credentials_file_path=credentials_file_path)
-        settings.update(User_config._load_config(config_file_path=config_file_path))
+        settings = User_config._load_credentials_file(credentials_file_path=creds_file_path, region_name=region_name)
+
+        if region_name is not None:
+            settings["region_name"] = region_name
+        else:
+            settings.update(User_config._load_config_file(config_file_path=conf_file_path))
 
         if not settings["aws_access_key_id"]:
             logger.critical("AWS access key ID not found.")
@@ -191,11 +198,11 @@ class AWS_profile:
             :param res:
             :return:
         """
-        output_folder = Path(__file__).parent / self.output_folder_name
+        output_folder = Path(__file__).parent / self.output_folder_name / self.boto_session.region_name
         output_file = output_folder / f"{service.name}.json"
 
         if not output_folder.exists():
-            output_folder.mkdir()
+            output_folder.mkdir(parents=True)
 
         output_file.write_text(json.dumps(res, indent=4, sort_keys=True, default=str))
 
