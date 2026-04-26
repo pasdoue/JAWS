@@ -47,33 +47,20 @@ class Service:
 
 class Services:
 
-    def __init__(self, filemap: Path, safe_mode: bool = True) -> None:
+    def __init__(self, filemap: Path = Config.SERVICES_FILE_MAPPING, safe_mode: bool = True) -> None:
         self.filemap = filemap
         self.safe_mode = safe_mode # by default is True to avoid wrong behaviors
         self.__whitelist: List[str] = []
         self.__blacklist: List[str] = []
         self.nb_services = 0
         self.nb_activated_services = 0
-        if not self.filemap.exists() or os.path.getsize(self.filemap) == 0:
-            self.services: List[Service] = list()
-        else:
-            self.services: List[Service] = self.__load_from_filemap()
+        self.services: List[Service] = list()
 
     def set_unsafe_mode(self):
         self.safe_mode = False
 
-    def __load_from_filemap(self) -> List[Service]:
-        res = list()
-        with open(self.filemap) as f:
-            content = json.loads(f.read())
-
-        for k,v in content.items():
-            curr_service = Service(name=k)
-            for func in v:
-                function = Function(name=func)
-                curr_service.add_function(function)
-            res.append(curr_service)
-        return res
+    def add_service(self, service: Service):
+        self.services.append(service)
 
     def get_services(self) -> List[Service]:
         """
@@ -86,14 +73,6 @@ class Services:
             Return only list of services names
         """
         return [service.name for service in self.get_services()] if len(self.get_services()) > 0 else None
-
-    def update_service(self, name: str, service_info: Service) -> None:
-        for service in self.services:
-            if service.name == name:
-                service = service_info
-                return
-        # if service does not already exists, we push it
-        self.services.append(service_info)
 
     def calculate_white_and_black_list(self, white_list: List[str], black_list: List[str]):
         """

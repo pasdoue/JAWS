@@ -1,7 +1,6 @@
 import random
 import sys
 import argparse
-import os
 import time
 
 import logging
@@ -20,7 +19,6 @@ from itertools import zip_longest
 from AWS_profile import AWS_profile, User_config
 from libs.Regions import Regions
 from libs.Services import Services, Service
-from settings import Config
 
 def print_banner() -> None:
     banners = []
@@ -129,7 +127,6 @@ def print_services(services: Services) -> None:
     logger.info(f"Total number of call to perform : {call_to_perform}")
 
 def parse_args() -> argparse.Namespace:
-    services_choices = Services(filemap=Config.SERVICES_FILE_MAPPING).get_services_names()
     regions_choices = Regions.load_filemap()
     regions_choices.append("all")
 
@@ -139,8 +136,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--config-file', default=User_config.default_config_file_path, help='AWS config file')
     parser.add_argument('-t', '--threads', type=int, default=75, help='Number of threads to use')
     parser.add_argument('--thread-timeout', type=int, default=30, help='Timeout consumed before killing thread')
-    parser.add_argument('-u', '--update-services', action="store_true", default=False,
-                        help='Update dynamically list of AWS services and associated functions')
+    parser.add_argument('--export-services', action="store_true", default=False,
+                        help='Export all boto3 services and associated functions to file')
     parser.add_argument('--update-regions', action="store_true", default=False,
                         help='Update remotely list of AWS regions (official web doc of AWS)')
     parser.add_argument('-r', '--regions', nargs='*',
@@ -148,13 +145,11 @@ def parse_args() -> argparse.Namespace:
                         help='Specify regions to scan',
                         metavar='PARAMETER')
     parser.add_argument('-b', '--black-list', nargs='*',
-                        default="cloudhsm,cloudhsmv2,sms,sms-voice.pinpoint",
-                        choices=services_choices,
+                        default="cloudhsm cloudhsmv2 sms sms-voice.pinpoint",
                         help='List of services to remove separated by comma. Launch script with -p to see services',
                         metavar='PARAMETER')
     parser.add_argument('-w', '--white-list', nargs='*',
                         default=[],
-                        choices=services_choices,
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
                         metavar='PARAMETER')
     parser.add_argument('-p', '--print-services', action="store_true", default=False,
@@ -171,7 +166,6 @@ if __name__ == "__main__":
     start = time.time()
 
     Regions.update_filemap(force=False)
-    services = Services(filemap=Config.SERVICES_FILE_MAPPING)
 
     args = parse_args()
     set_logger(level=args.verbose)
@@ -192,17 +186,18 @@ if __name__ == "__main__":
 
     for curr_settings in settings_list:
 
-        aws_profile = AWS_profile(services=services, creds=curr_settings)
+        aws_profile = AWS_profile(creds=curr_settings)
 
-        if args.update_services or not services.filemap.exists() or os.path.getsize(services.filemap) == 0:
-            aws_profile.update_dynamically_services_functions()
+        if args.export_services:
+            aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
+            aws_profile.save_to_filemap()
             print_elapsed_time(start=start)
             logger.info("Run this script a second time to perform actions.")
             sys.exit(0)
 
         if args.print_services:
-            services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
-            print_services(services=services)
+            aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
+            print_services(services=aws_profile.services)
             print_elapsed_time(start=start)
             sys.exit(0)
 
@@ -210,12 +205,12 @@ if __name__ == "__main__":
 
         verify_unsafe(unsafe=args.unsafe_mode, aws_profile=aws_profile)
 
-        services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
-        services.calculate_safe_mode()
+        aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
+        aws_profile.services.calculate_safe_mode()
 
-        NUMBER_OF_THREADS = services.nb_activated_services if services.nb_activated_services < args.threads else args.threads
+        NUMBER_OF_THREADS = aws_profile.services.nb_activated_services if aws_profile.services.nb_activated_services < args.threads else args.threads
 
-        services_chunks = np.array_split(services.get_services(), NUMBER_OF_THREADS)
+        services_chunks = np.array_split(aws_profile.services.get_services(), NUMBER_OF_THREADS)
         services_chunks = [list(chunk) for chunk in services_chunks]
 
         task_queue = queue.Queue()
@@ -236,7 +231,7 @@ if __name__ == "__main__":
             # Add tasks to the progress bar
             task_progress_ids = {
                 service.name: progress.add_task(f"[green]Processing {service.name}...", total=len(service.get_functions()))
-                for service in services.get_services()
+                for service in aws_profile.services.get_services()
             }
 
             # Start worker threads

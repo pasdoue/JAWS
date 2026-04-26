@@ -58,8 +58,8 @@ python3 main.py -u
 ⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
-usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [-u] [-b [PARAMETER ...]] [-w [PARAMETER ...]] [-p]
-               [--unsafe-mode]
+usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--export-services] [--update-regions] [-r [PARAMETER ...]] [-b [PARAMETER ...]] [-w [PARAMETER ...]]
+               [-p] [--unsafe-mode] [-v]
 
 Bruteforce AWS rights with boto3
 
@@ -69,18 +69,17 @@ options:
                         AWS credentials file
   --config-file CONFIG_FILE
                         AWS config file
-  -t THREADS, --threads THREADS
+  -t, --threads THREADS
                         Number of threads to use
   --thread-timeout THREAD_TIMEOUT
                         Timeout consumed before killing thread
-  -u, --update-services
-                        Update dynamically list of AWS services and associated functions
+  --export-services     Export all boto3 services and associated functions to file
   --update-regions      Update remotely list of AWS regions (official web doc of AWS)
-  -r [PARAMETER ...], --regions [PARAMETER ...]
+  -r, --regions [PARAMETER ...]
                         Specify regions to scan
-  -b [PARAMETER ...], --black-list [PARAMETER ...]
+  -b, --black-list [PARAMETER ...]
                         List of services to remove separated by comma. Launch script with -p to see services
-  -w [PARAMETER ...], --white-list [PARAMETER ...]
+  -w, --white-list [PARAMETER ...]
                         List of services to whitelist/scan separated by comma. Launch script with -p to see services
   -p, --print-services  List of all available services
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.

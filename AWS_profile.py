@@ -122,16 +122,17 @@ class User_config:
 
 class AWS_profile:
 
-    def __init__(self, services: Services, creds: Dict) -> None:
+    def __init__(self, creds: Dict) -> None:
         """
             Init object according to input settings (
             :param kwargs: creds used
         """
         self.boto_session = boto3.session.Session(**creds)
-        self.__services: Services = services
         self.__safe_mode = True
         self.arn = self.boto_session.client('sts').get_caller_identity().get('Arn')
         self.output_folder_name = AWS_profile.get_arn_safe_linux(arn=self.arn) # Get end of Arn which is human-readable and remove '/' inside
+        self.services: Services = Services()
+        self.update_dynamically_services_functions()
 
     @staticmethod
     def get_arn_safe_linux(arn: str) -> str:
@@ -139,7 +140,7 @@ class AWS_profile:
 
     def set_unsafe_mode(self):
         self.__safe_mode = False
-        self.__services.set_unsafe_mode()
+        self.services.set_unsafe_mode()
 
     def launch_discovery(self, services: List[Service], progress, task_progress_ids):
         all_res = list()
@@ -162,7 +163,9 @@ class AWS_profile:
         res[service.name] = {}
 
         for function in service.get_functions():
-            if any(function.name.startswith(safe_mode) for safe_mode in Config.SAFE_MODE):
+            if any(function.name.startswith(safe_mode) for safe_mode in Config.SAFE_MODE) and \
+                    not any(function.name.startswith(billing) for billing in Config.BILLING_HEAVY_PREFIXES) and \
+                    not any(pattern in function.name for pattern in Config.AVOID_PATTERN):
                 service_function = getattr(session_obj, function.name)
                 if service_function is None:
                     res[service.name][function.name] = "unavailable"
@@ -222,25 +225,26 @@ class AWS_profile:
                 logger.error(f"Impossible to connect to AWS service : {service}\n{str(e)}")
                 continue
             for function in dir(boto_service):
-                if not function.startswith("_") and not "delete" in function.lower():
+                if not function.startswith("_"):
                     func = getattr(boto_service, function)
                     try:
                         sig = signature(func)
                         if len(sig.parameters) <= 2:
+                            #TODO try to handle params here before running script
                             curr_service.add_function(function=Function(name=function))
-                    except TypeError as e:
+                    except TypeError:
                         pass
-            self.__services.update_service(name=curr_service.name, service_info=curr_service)
+            self.services.add_service(service=curr_service)
 
-        self.save_to_filemap()
         logger.success("Update finished !")
         return
 
-    def save_to_filemap(self):
-        if self.__services is None:
+    def save_to_filemap(self, output_file: Path = None):
+        out_file = output_file if output_file is not None else self.services.filemap
+        if self.services is None:
             raise ValueError("Services are not provided")
         res = dict()
-        for service in self.__services.services:
+        for service in self.services.services:
             res[service.name] = [function.name for function in service.functions]
-        with open(self.__services.filemap, 'w') as f:
+        with open(out_file, 'w') as f:
             f.write(json.dumps(res, indent=4, sort_keys=True, default=str))
