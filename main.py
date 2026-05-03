@@ -16,8 +16,9 @@ import queue
 import numpy as np
 from itertools import zip_longest
 
-from AWS_profile import AWS_profile, User_config
+from AWS_profile import AWS_profile
 from libs.Regions import Regions
+from libs.User import User_config
 from libs.Services import Services, Service
 
 def print_banner() -> None:
@@ -75,8 +76,8 @@ def worker(task_queue, aws_profile: AWS_profile, progress, task_progress_ids) ->
 
 def verify_unsafe(unsafe: bool, aws_profile: AWS_profile) -> None:
     if unsafe:
-        resp = Confirm.ask("Are you sure you want to run this script in unsafe mode ?", show_choices=True)
-        if resp == "n":
+        resp = Confirm.ask("Are you sure you want to run this script in unsafe mode ?", show_choices=True, console=console)
+        if not resp:
             sys.exit(0)
         else:
             logger.warning("Running in unsafe mode.")
@@ -103,12 +104,24 @@ def print_services(services: Services) -> None:
         (allow estimating if furtivity is in place or not)
     """
     call_to_perform = 0
+    not_activated_function_in_activated_services = 0
+
     repr_array = []
-    activated_services = services.get_services()
+    activated_services = services.get_services(active_only=True)
+    all_services = services.get_services(active_only=False)
+
+    total_api_calls = sum([len(service.get_functions(active_only=False)) for service in all_services])
+
     logger.info(f"{Emoji('hamster')} Every service are listed below with it's associated number of functions : ")
     for service in activated_services:
-        call_to_perform += len(service.get_functions())
-        repr_array.append((service.name, len(service.get_functions())))
+        functions_activated = service.get_functions(active_only=True)
+        all_functions = service.get_functions(active_only=False)
+        diff_functions = set(all_functions) - set(functions_activated)
+
+        not_activated_function_in_activated_services += len(diff_functions)
+
+        call_to_perform += len(functions_activated)
+        repr_array.append((service.name, len(functions_activated)))
 
     PAIRS_PER_ROW = min(len(repr_array),5)  # change to 3, 4, etc.
 
@@ -123,8 +136,9 @@ def print_services(services: Services) -> None:
             for name, num in group
         ), highlight=True)
 
-    logger.info(f"Total number of services : {len(activated_services)}")
-    logger.info(f"Total number of call to perform : {call_to_perform}")
+    logger.info(f"Total number of activated services : [{len(activated_services)}/{len(all_services)}]")
+    logger.info(f"Total number of call to perform : [{call_to_perform}/{total_api_calls}]")
+    logger.info(f"Total number of functions avoided inside active service : {not_activated_function_in_activated_services}")
 
 def parse_args() -> argparse.Namespace:
     regions_choices = Regions.load_filemap()
@@ -152,6 +166,7 @@ def parse_args() -> argparse.Namespace:
                         default=[],
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
                         metavar='PARAMETER')
+    parser.add_argument('--no-banner', action="store_true", default=False, help='Do not print banner')
     parser.add_argument('-p', '--print-services', action="store_true", default=False,
                         help='List of all available services')
     parser.add_argument('--unsafe-mode', action="store_true", default=False,
@@ -162,13 +177,16 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
 
-    print_banner()
     start = time.time()
 
     Regions.update_filemap(force=False)
 
     args = parse_args()
     set_logger(level=args.verbose)
+
+    print(args.no_banner)
+    if not args.no_banner:
+        print_banner()
 
     if args.update_regions:
         Regions.update_filemap(force=True)
@@ -188,29 +206,32 @@ if __name__ == "__main__":
 
         aws_profile = AWS_profile(creds=curr_settings)
 
-        if args.export_services:
-            aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
-            aws_profile.save_to_filemap()
-            print_elapsed_time(start=start)
-            logger.info("Run this script a second time to perform actions.")
-            sys.exit(0)
-
-        if args.print_services:
-            aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
-            print_services(services=aws_profile.services)
-            print_elapsed_time(start=start)
-            sys.exit(0)
-
-        logger.info(f"Be patient, script can take up to 6min to BF. {Emoji('pray')}")
+        aws_profile.iam_enum()
 
         verify_unsafe(unsafe=args.unsafe_mode, aws_profile=aws_profile)
-
         aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
         aws_profile.services.calculate_safe_mode()
 
+        if args.export_services:
+            aws_profile.save_to_filemap()
+            print_elapsed_time(start=start)
+            start = time.time()
+
+        if args.print_services:
+            print_services(services=aws_profile.services)
+            print_elapsed_time(start=start)
+            start = time.time()
+
+            resp = Confirm.ask(f"Would you like to run script with this config ?", show_choices=True, console=console)
+            if not resp:
+                logger.info("Exiting")
+                sys.exit(0)
+
+        logger.info(f"Be patient, script can take up to 6min to BF. {Emoji('pray')}")
+
         NUMBER_OF_THREADS = aws_profile.services.nb_activated_services if aws_profile.services.nb_activated_services < args.threads else args.threads
 
-        services_chunks = np.array_split(aws_profile.services.get_services(), NUMBER_OF_THREADS)
+        services_chunks = np.array_split(aws_profile.services.get_services(active_only=True), NUMBER_OF_THREADS)
         services_chunks = [list(chunk) for chunk in services_chunks]
 
         task_queue = queue.Queue()
@@ -231,7 +252,7 @@ if __name__ == "__main__":
             # Add tasks to the progress bar
             task_progress_ids = {
                 service.name: progress.add_task(f"[green]Processing {service.name}...", total=len(service.get_functions()))
-                for service in aws_profile.services.get_services()
+                for service in aws_profile.services.get_services(active_only=True)
             }
 
             # Start worker threads

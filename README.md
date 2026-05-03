@@ -31,16 +31,17 @@ This code is using official boto library and load dynamically all subfunctions o
  region = us-east-2
 ```
 
-2. Generate AWS boto config file first launch or force it
+2. Create a safe execution code environment and launch it
 
 If you run this script the first time with or without params, it will perform an update of sessions and functions available by boto first.
 ```bash
-python3 main.py -u
+python3 -m venv venv && souce venv/bin/activate
+python3 -m pip install -e .
 ```
 
 3. Start gathering info
 
-> Help
+> python3 -h
 
 ```bash
 [*]
@@ -59,7 +60,7 @@ python3 main.py -u
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
 usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--export-services] [--update-regions] [-r [PARAMETER ...]] [-b [PARAMETER ...]] [-w [PARAMETER ...]]
-               [-p] [--unsafe-mode] [-v]
+               [--no-banner] [-p] [--unsafe-mode] [-v]
 
 Bruteforce AWS rights with boto3
 
@@ -81,14 +82,51 @@ options:
                         List of services to remove separated by comma. Launch script with -p to see services
   -w, --white-list [PARAMETER ...]
                         List of services to whitelist/scan separated by comma. Launch script with -p to see services
+  --no-banner           Do not print banner
   -p, --print-services  List of all available services
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
 ```
 
+## How does it works ? 
+
+1. Take up to date list of availables regions inside AWS according to : https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html
+Feel free to add some regions of your own after script created the file "regions.json". If not you wont be able to scan those regions as script wont let you
+
+2. Script begin always by loading all services and functions available in SDK. So ti is always up to date (does not slow down tool either).
+
+3. Perform equivalent of `aws sts get_caller_identity` to retrieve ARN (identity of the token)
+Examples : 
+arn:aws:sts::718896642544:assumed-role/web01/i-0d925034be5d2f45b
+arn:aws:iam::718896642544:user/lucifer
+
+4. From ARN we can know if we are a "user" or a "role".
+So we will call the following function : 
+User : 
+get_account_authorization_details
+get_user
+list_attached_user_policies
+list_user_policies
+list_groups_for_user
+list_group_policies
+
+Role : 
+get_role
+list_attached_role_policies
+list_role_policies
+
+5. Once those information retrieved, it performs brute force on whatever endpoint you tell it to
+
+## Commands cheat sheet
+
 Launch scan on all services : 
 ```bash
 python3 main.py
+```
+
+Spawn script without banner (bye bye sharky :/) : 
+```bash
+python3 main.py --no-banner
 ```
 
 Show list of available services : 
@@ -96,12 +134,13 @@ Show list of available services :
 python3 main.py -p
 ```
 
-Scan using white-list : 
+Scan using services white-list : 
 ```bash
 python3 main.py -w ec2 sts pricing dynamodb
 ```
 
 Show number of calls that will be performed using only some services : 
+Asks you if you want to perform scan now ;)
 ```bash
 python3 main.py -p -w ec2 sts dynamodb
 ```
@@ -136,9 +175,16 @@ Total BF (unsafe mode, not recommended if you don't know what you do)
 python3 main.py --unsafe-mode
 ```
 
+## Done : 
+
+- [X] Handle profile like aws cli and allow user to use any file config
+- [X] Support multiple regions to scan
+- [X] Allow specific service/function hooking
+- [X] Performs some IAM checks before and avoid some useless calls (that can also trigger alerts)
+
 ## TBD : 
 
-- [ ] Implement V3 (but shush it's a secret :D)
+- [ ] Perform list_ before get_ or describe_
 - [ ] Detect if some results will be erased and trigger a warning if different from previous run
 - [ ] Maybe chunk output json files that are too big (but make it optional)
 

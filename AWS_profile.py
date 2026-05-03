@@ -2,9 +2,9 @@ import importlib
 import inspect
 import json
 import pkgutil
-from configparser import ConfigParser
+from enum import Enum
 from pathlib import Path
-from typing import List, Dict, Union, Any
+from typing import List, Dict, Union, Any, Tuple
 
 from R2Log import logger
 
@@ -12,7 +12,6 @@ import boto3, botocore
 from inspect import signature
 
 from rich.emoji import Emoji
-from rich.prompt import Prompt
 
 import meta_aws
 from libs.Services import Services, Service, Function
@@ -39,86 +38,9 @@ def search_adequate_module(module: str, method: str, arn: str, boto_func: Any) -
     return None
 
 
-class User_config:
-    """
-        This class will parse config file of user and return a dict with all params to use in boto3.session.Session.
-        Because boto3.session.Session params differs from config files (thanks AWS... grrr) we need to reformat them
-    """
-    default_credentials_file_path: Path = Path.home() / ".aws" / "credentials"
-    default_config_file_path: Path = Path.home() / ".aws" / "config"
-
-    @classmethod
-    def _load_credentials_file(cls, credentials_file_path: Path = default_credentials_file_path, region_name: Union[str, None] = None) -> Union[dict, None]:
-        res = {}
-        credentials = ConfigParser()
-
-        if credentials_file_path.exists():
-            credentials.read(credentials_file_path)
-            cred_section = ""
-            if len(credentials.sections()) > 1:
-                prompt = f"Choose credentials to use : " if region_name is None else f"Choose credentials to use for region ({region_name}) : "
-                cred_section = Prompt.ask(prompt=prompt, choices=credentials.sections(), show_choices=True)
-            elif len(credentials.sections()) == 1:
-                cred_section = credentials.sections()[0]
-            else:
-                logger.critical(f"{Emoji('hamster')} AWS credentials file detected but no section found.")
-
-            if cred_section:
-                tmp = dict(credentials.items(cred_section))
-                res["profile_name"] = cred_section
-
-                # Because AWS Boto library Session only accept those params and no other ones... We need to remove all other params... GG AWS
-                for k, v in tmp.items():
-                    # verify this param exists in boto3.session.Session
-                    if k in inspect.signature(boto3.session.Session).parameters.keys():
-                        res[k] = v
-            return res
-        else:
-            logger.critical(f"{Emoji('no_entry_sign')} AWS credentials file does not exists. Configure it to launch script")
-
-    @classmethod
-    def _load_config_file(cls, config_file_path: Path = default_config_file_path, region_name: Union[str, None] = None) -> Union[dict, None]:
-        config = ConfigParser()
-
-        if region_name is not None:
-            return {"region_name": region_name}
-
-        if config_file_path.exists():
-            config.read(config_file_path)
-            config_section = ""
-            if len(config.sections()) > 1:
-                config_section = Prompt.ask(prompt="Choose config to use : ", choices=config.sections(), show_choices=True)
-            elif len(config.sections()) == 1:
-                config_section = config.sections()[0]
-            else:
-                logger.critical(f"{Emoji('hamster')} AWS config file detected but no section found.")
-
-            # Because AWS Boto library Session only accept those params and no other ones... We need to remove all other params... GG AWS
-            return {"region_name": config.get(config_section, "region")}
-        else:
-            logger.critical(f"{Emoji('no_entry_sign')} AWS config file does not exist. Using environment variables. Configure it to launch script")
-
-    @staticmethod
-    def load(credentials_file_path: Union[Path|str] = default_credentials_file_path,
-             config_file_path: Union[Path|str] = default_config_file_path,
-             region_name: str = None) -> dict:
-
-        creds_file_path = Path(credentials_file_path).expanduser() if isinstance(credentials_file_path, str) else credentials_file_path.expanduser()
-        conf_file_path = Path(config_file_path).expanduser() if isinstance(config_file_path, str) else config_file_path.expanduser()
-
-        settings = User_config._load_credentials_file(credentials_file_path=creds_file_path, region_name=region_name)
-
-        if region_name is not None:
-            settings["region_name"] = region_name
-        else:
-            settings.update(User_config._load_config_file(config_file_path=conf_file_path))
-
-        if not settings["aws_access_key_id"]:
-            logger.critical("AWS access key ID not found.")
-        if not settings["aws_secret_access_key"]:
-            logger.critical("AWS secret access key not found.")
-
-        return settings
+class EntityTypeEnum(Enum):
+    user = "user"
+    role = "role"
 
 class AWS_profile:
 
@@ -130,9 +52,23 @@ class AWS_profile:
         self.boto_session = boto3.session.Session(**creds)
         self.__safe_mode = True
         self.arn = self.boto_session.client('sts').get_caller_identity().get('Arn')
+        self.entity_type, self.entity_name = self.get_entity_type_and_name(arn=self.arn)
+        logger.success(f"Arn : {self.arn}\nEntity_type : {self.entity_type} {Emoji('boom')}{Emoji('sweat_drops')}\nEntity_name : {self.entity_name} {Emoji('speech_balloon')}")
         self.output_folder_name = AWS_profile.get_arn_safe_linux(arn=self.arn) # Get end of Arn which is human-readable and remove '/' inside
         self.services: Services = Services()
+
+        # avoid calling IAM role function if we are user and vice versa
         self.update_dynamically_services_functions()
+
+    @staticmethod
+    def get_entity_type_and_name(arn: str) -> Tuple[EntityTypeEnum, str]:
+        if "assumed-role" in arn:
+            entity_type = EntityTypeEnum.role
+            entity_name = arn.split("/")[-2]
+        else:
+            entity_type = EntityTypeEnum.user
+            entity_name = arn.split("/")[-1]
+        return entity_type, entity_name
 
     @staticmethod
     def get_arn_safe_linux(arn: str) -> str:
@@ -215,6 +151,8 @@ class AWS_profile:
             Results are saved in a file.
         """
         logger.info("Updating dynamically list of AWS services and associated functions")
+        # if we are user then remove IAM "role" calls, and vice versa
+        iam_entity_to_remove = self.get_iam_entity_to_remove()
 
         available_services = self.boto_session.get_available_services()
         for service in available_services:
@@ -226,14 +164,16 @@ class AWS_profile:
                 continue
             for function in dir(boto_service):
                 if not function.startswith("_"):
-                    func = getattr(boto_service, function)
-                    try:
-                        sig = signature(func)
-                        if len(sig.parameters) <= 2:
-                            #TODO try to handle params here before running script
-                            curr_service.add_function(function=Function(name=function))
-                    except TypeError:
-                        pass
+                    # remove user or role API in IAM according to current entity type
+                    if not (curr_service.name == "iam" and iam_entity_to_remove.value in function):
+                        func = getattr(boto_service, function)
+                        try:
+                            sig = signature(func)
+                            if len(sig.parameters) <= 2:
+                                #TODO try to handle params here before running script
+                                curr_service.add_function(function=Function(name=function, activated=True))
+                        except TypeError:
+                            pass
             self.services.add_service(service=curr_service)
 
         logger.success("Update finished !")
@@ -248,3 +188,159 @@ class AWS_profile:
             res[service.name] = [function.name for function in service.functions]
         with open(out_file, 'w') as f:
             f.write(json.dumps(res, indent=4, sort_keys=True, default=str))
+        logger.success(f"Successfully exported services to filemap : {out_file}")
+
+    ####################################################################################
+    ###### Handling IAM specific routes (according to entity type : user or role)
+    ####################################################################################
+    def iam_enum(self):
+
+        logger.info(f"Trying to gain some IAM information before brute force.")
+        logger.info(f"Knowing that we are of type : {self.entity_type} {Emoji('sweat_drops')}")
+        iam_client = self.boto_session.client("iam")
+
+        self.iam_enum_get_account_authorization_details(iam_client=iam_client)
+
+        if self.entity_type == EntityTypeEnum.user:
+            self.iam_enum_get_user(iam_client=iam_client)
+
+            self.iam_enum_list_attached_user_policies(iam_client=iam_client, username=self.entity_name)
+            self.iam_enum_list_user_policies(iam_client=iam_client, username=self.entity_name)
+            user_groups = self.iam_enum_list_groups_for_user(iam_client=iam_client, username=self.entity_name)
+
+            if user_groups is not None:
+                self.iam_enum_list_group_policies(iam_client=iam_client, user_groups=user_groups)
+        else:
+            self.iam_enum_get_role(iam_client=iam_client, role_name=self.entity_name)
+            self.iam_enum_list_attached_role_policies(iam_client=iam_client, role_name=self.entity_name)
+            self.iam_enum_list_role_policies(iam_client=iam_client, role_name=self.entity_name)
+
+        logger.success(f"IAM discovery finished {Emoji('popcorn')}")
+
+    @staticmethod
+    def iam_enum_get_account_authorization_details(iam_client) -> None:
+        try:
+            everything = iam_client.get_account_authorization_details()
+            logger.success(f"IAM get_account_authorization_details worked!")
+            logger.success(json.dumps(everything, indent=4, default=str))
+        except Exception as e:
+            logger.error(f"Failed to interrogate IAM get_account_authorization_details() : \n{str(e)}")
+
+    def get_iam_entity_to_remove(self) -> EntityTypeEnum:
+        """
+            Return the entity type to remove from IAM to avoid unnecessary call
+        """
+        return EntityTypeEnum.user if self.entity_type == EntityTypeEnum.role else EntityTypeEnum.role
+
+    def _deactivate_iam_user_or_role(self):
+        """
+            According to detected type for entity, we deactivate IAM functions for user if we are role and vice versa
+        """
+        entity_to_remove = self.get_iam_entity_to_remove()
+        logger.info(f"Deactivating IAM functions for entity type : {entity_to_remove}")
+        self.services.deactivate_service_function(service_name="iam",
+                                                  search_type="str",
+                                                  is_substring=True,
+                                                  pattern=entity_to_remove.value)
+
+    ##########################################
+    ###### ROLE FUNCTIONS
+    ##########################################
+    @staticmethod
+    def iam_enum_get_role(iam_client, role_name: str) -> Union[str, None]:
+        try:
+            #TODO : find a role that can do this to test
+            role = iam_client.get_role(RoleName=role_name)
+            logger.success(f"get_role() worked!")
+            logger.success(f"{json.dumps(role, indent=4, default=str)}")
+        except Exception as e:
+            logger.error(f"Failed to interrogate IAM get_role() : \n{str(e)}")
+
+    @staticmethod
+    def iam_enum_list_attached_role_policies(iam_client, role_name: str) -> Union[str, None]:
+        try:
+            # TODO : find a role that can do this to test
+            role_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+            for policy in role_policies["AttachedPolicies"]:
+                logger.success(f"Policy Name & ARN [{policy['PolicyName']}] : {policy['PolicyArn']}")
+        except Exception as e:
+            logger.error(f"Failed to interrogate IAM list_attached_role_policies() : \n{str(e)}")
+
+    @staticmethod
+    def iam_enum_list_role_policies(iam_client, role_name: str) -> None:
+        try:
+            role_policies = iam_client.list_role_policies(RoleName=role_name)
+            logger.success(f"IAM list_role_policies worked!")
+            logger.info(f"Role {role_name} has {len(role_policies['PolicyNames'])} inline policies")
+            # List all policies, if present.
+            for policy in role_policies['PolicyNames']:
+                logger.success(f"Policy : {policy}")
+        except botocore.exceptions.ClientError as err:
+            logger.error(f"Failed to interrogate IAM list_role_policies() : \n{str(err)}")
+
+    ##########################################
+    ###### USER FUNCTIONS
+    ##########################################
+    @staticmethod
+    def iam_enum_get_user(iam_client) -> Union[str, None]:
+        try:
+            user = iam_client.get_user()
+            logger.success(f"IAM get_user worked!")
+            logger.success(json.dumps(user, indent=4, default=str))
+            if 'UserName' not in user['User']:
+                if user['User']['Arn'].endswith(':root'):
+                    logger.success(f"Found root credentials {Emoji('1st_place_medal')}! \n{user['User']['Arn']}")
+                else:
+                    logger.error("Unexpected iam.get_user() response: %s" % user)
+            else:
+                return user['User']['UserName']
+        except Exception as e:
+            logger.error(f"Failed to interrogate IAM get_user() : \n{str(e)}")
+
+    @staticmethod
+    def iam_enum_list_attached_user_policies(iam_client, username: str) -> None:
+        try:
+            user_policies = iam_client.list_attached_user_policies(UserName=username)
+            logger.success(f"IAM list_attached_user_policies worked!")
+            logger.info(f"User {username} has {len(user_policies['AttachedPolicies'])} policies")
+            for policy in user_policies['AttachedPolicies']:
+                logger.success(f"Policy Name & ARN : {policy['PolicyName']} [{policy['PolicyArn']}]")
+        except botocore.exceptions.ClientError as err:
+            logger.error(f"Failed to interrogate IAM list_attached_user_policies() : \n{str(err)}")
+
+    @staticmethod
+    def iam_enum_list_user_policies(iam_client, username: str) -> None:
+        try:
+            user_policies = iam_client.list_user_policies(UserName=username)
+            logger.success(f"IAM list_user_policies worked!")
+            logger.info(f"User {username} has {len(user_policies['PolicyNames'])} inline policies")
+            # List all policies, if present.
+            for policy in user_policies['PolicyNames']:
+                logger.success(f"Policy : {policy}")
+        except botocore.exceptions.ClientError as err:
+            logger.error(f"Failed to interrogate IAM list_user_policies() : \n{str(err)}")
+
+    @staticmethod
+    def iam_enum_list_groups_for_user(iam_client, username: str) -> Union[dict, None]:
+        try:
+            user_groups = iam_client.list_groups_for_user(UserName=username)
+            logger.success(f"IAM list_groups_for_user worked!")
+            logger.info(f"User {username} has {len(user_groups['Groups'])} groups associated")
+            return user_groups
+        except botocore.exceptions.ClientError as err:
+            logger.error(f"Failed to interrogate IAM list_groups_for_user() : \n{str(err)}")
+
+    @staticmethod
+    def iam_enum_list_group_policies(iam_client, user_groups: dict) -> Union[dict, None]:
+        for group in user_groups['Groups']:
+            group_name = group['GroupName']
+            try:
+                group_policies = iam_client.list_group_policies(GroupName=group_name)
+                logger.success(f"IAM Group {group_name} has {len(group_policies['PolicyNames'])} inline policies : ")
+                for policy in group_policies['PolicyNames']:
+                    logger.info(f"---> {policy}")
+                return user_groups
+            except botocore.exceptions.ClientError as err:
+                logger.error(f"Failed to interrogate IAM list_group_policies() : \n{str(err)}")
+
+
