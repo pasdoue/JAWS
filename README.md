@@ -59,8 +59,8 @@ python3 -m pip install -e .
 ⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
-usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--export-services] [--update-regions] [-r [PARAMETER ...]] [-b [PARAMETER ...]] [-w [PARAMETER ...]]
-               [--no-banner] [-p] [--unsafe-mode] [-v]
+usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--export-services] [--update-regions]
+               [-r [PARAMETER ...]] [-b [PARAMETER ...]] [-w [PARAMETER ...]] [--no-metadata] [--no-banner] [-p] [--unsafe-mode] [-v]
 
 Bruteforce AWS rights with boto3
 
@@ -82,6 +82,7 @@ options:
                         List of services to remove separated by comma. Launch script with -p to see services
   -w, --white-list [PARAMETER ...]
                         List of services to whitelist/scan separated by comma. Launch script with -p to see services
+  --no-metadata         Do not retrieve metadata of all AWS SDK calls
   --no-banner           Do not print banner
   -p, --print-services  List of all available services
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
@@ -122,6 +123,11 @@ list_role_policies
 Launch scan on all services : 
 ```bash
 python3 main.py
+```
+
+Launch scan on all services without metadata : 
+```bash
+python3 main.py --no-metadata
 ```
 
 Spawn script without banner (bye bye sharky :/) : 
@@ -181,6 +187,8 @@ python3 main.py --unsafe-mode
 - [X] Support multiple regions to scan
 - [X] Allow specific service/function hooking
 - [X] Performs some IAM checks before and avoid some useless calls (that can also trigger alerts)
+- [X] Remove metadata from SDK response (better clarity & less storage used)
+- [X] Put first IAM checks & results after BF performed (also check why thos calls are performed as they should be deactivated for BF phase)
 
 ## TBD : 
 

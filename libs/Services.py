@@ -81,6 +81,13 @@ class Services:
             return [service.name for service in self.get_services(active_only=False)] if len(self.get_services(active_only=False)) > 0 else None
 
     def deactivate_service_function(self, service_name: str, search_type: str = "str", pattern="", is_substring: bool = False):
+        """
+            Function to deactivate specific(s) function(s) by pattern (can be strict / light comparison or regex)
+            :param service_name: name of service to scan
+            :param service_type: can be "str" or "regex"
+            :param pattern: pattern to search
+            :param is_subtring: In case we are in "str" search, allow "light" comparison". If not set, strict comparison is performed
+        """
         for service in self.get_services(active_only=True):
             if service.name == service_name:
                 for function in service.get_functions(active_only=True):

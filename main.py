@@ -166,6 +166,7 @@ def parse_args() -> argparse.Namespace:
                         default=[],
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
                         metavar='PARAMETER')
+    parser.add_argument('--no-metadata', action="store_true", default=True, help='Do not retrieve metadata of all AWS SDK calls')
     parser.add_argument('--no-banner', action="store_true", default=False, help='Do not print banner')
     parser.add_argument('-p', '--print-services', action="store_true", default=False,
                         help='List of all available services')
@@ -206,7 +207,7 @@ if __name__ == "__main__":
 
         aws_profile = AWS_profile(creds=curr_settings)
 
-        aws_profile.iam_enum()
+        iam_res = aws_profile.iam_enum()
 
         verify_unsafe(unsafe=args.unsafe_mode, aws_profile=aws_profile)
         aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
@@ -229,9 +230,10 @@ if __name__ == "__main__":
 
         logger.info(f"Be patient, script can take up to 6min to BF. {Emoji('pray')}")
 
-        NUMBER_OF_THREADS = aws_profile.services.nb_activated_services if aws_profile.services.nb_activated_services < args.threads else args.threads
+        services_to_bf = aws_profile.services.get_services(active_only=True)
+        NUMBER_OF_THREADS = len(services_to_bf) if len(services_to_bf) < args.threads else args.threads
 
-        services_chunks = np.array_split(aws_profile.services.get_services(active_only=True), NUMBER_OF_THREADS)
+        services_chunks = np.array_split(services_to_bf, NUMBER_OF_THREADS)
         services_chunks = [list(chunk) for chunk in services_chunks]
 
         task_queue = queue.Queue()
@@ -265,6 +267,8 @@ if __name__ == "__main__":
             # Wait for all threads to finish
             for thread in threads:
                 thread.join(timeout=args.thread_timeout)
+
+        aws_profile.write_iam_results_at_the_end(iam_results=iam_res)
 
         logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.boto_session.region_name}")
         print_elapsed_time(start=start)

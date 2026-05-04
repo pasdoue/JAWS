@@ -44,7 +44,7 @@ class EntityTypeEnum(Enum):
 
 class AWS_profile:
 
-    def __init__(self, creds: Dict) -> None:
+    def __init__(self, creds: Dict, no_metadata: bool = True) -> None:
         """
             Init object according to input settings (
             :param kwargs: creds used
@@ -56,6 +56,7 @@ class AWS_profile:
         logger.success(f"Arn : {self.arn}\nEntity_type : {self.entity_type} {Emoji('boom')}{Emoji('sweat_drops')}\nEntity_name : {self.entity_name} {Emoji('speech_balloon')}")
         self.output_folder_name = AWS_profile.get_arn_safe_linux(arn=self.arn) # Get end of Arn which is human-readable and remove '/' inside
         self.services: Services = Services()
+        self.no_metadata: Services = no_metadata
 
         # avoid calling IAM role function if we are user and vice versa
         self.update_dynamically_services_functions()
@@ -122,6 +123,7 @@ class AWS_profile:
                         continue
                     if ret is not None:
                         logger.success(f"{service.name}:{function.name} is available")
+                        if self.no_metadata: AWS_profile.remove_response_metadata(resp=ret)
                         res[service.name][function.name] = ret
                     else:
                         res[service.name][function.name] = "empty"
@@ -193,38 +195,54 @@ class AWS_profile:
     ####################################################################################
     ###### Handling IAM specific routes (according to entity type : user or role)
     ####################################################################################
-    def iam_enum(self):
 
+    @staticmethod
+    def remove_response_metadata(resp: dict) -> None:
+        """
+            Every call to an endpoint generate metadata. 
+            By default remove them as they have nothing interesting
+        """
+        if isinstance(resp, dict) and "ResponseMetadata" in resp.keys():
+            resp.pop("ResponseMetadata")
+
+    def iam_enum(self) -> dict:
+
+        res = {}
         logger.info(f"Trying to gain some IAM information before brute force.")
         logger.info(f"Knowing that we are of type : {self.entity_type} {Emoji('sweat_drops')}")
         iam_client = self.boto_session.client("iam")
 
-        self.iam_enum_get_account_authorization_details(iam_client=iam_client)
+        res["get_account_authorization_details"] = self.iam_enum_get_account_authorization_details(iam_client=iam_client)
 
         if self.entity_type == EntityTypeEnum.user:
-            self.iam_enum_get_user(iam_client=iam_client)
-
-            self.iam_enum_list_attached_user_policies(iam_client=iam_client, username=self.entity_name)
-            self.iam_enum_list_user_policies(iam_client=iam_client, username=self.entity_name)
-            user_groups = self.iam_enum_list_groups_for_user(iam_client=iam_client, username=self.entity_name)
+            res["get_user"] = self.iam_enum_get_user(iam_client=iam_client, no_metadata=self.no_metadata)
+            res["list_attached_user_policies"] = self.iam_enum_list_attached_user_policies(iam_client=iam_client, username=self.entity_name, no_metadata=self.no_metadata)
+            res["list_user_policies"] = self.iam_enum_list_user_policies(iam_client=iam_client, username=self.entity_name, no_metadata=self.no_metadata)
+            res["list_groups_for_user"] = user_groups = self.iam_enum_list_groups_for_user(iam_client=iam_client, username=self.entity_name, no_metadata=self.no_metadata)
 
             if user_groups is not None:
                 self.iam_enum_list_group_policies(iam_client=iam_client, user_groups=user_groups)
         else:
-            self.iam_enum_get_role(iam_client=iam_client, role_name=self.entity_name)
-            self.iam_enum_list_attached_role_policies(iam_client=iam_client, role_name=self.entity_name)
-            self.iam_enum_list_role_policies(iam_client=iam_client, role_name=self.entity_name)
+            res["get_role"] = self.iam_enum_get_role(iam_client=iam_client, role_name=self.entity_name, no_metadata=self.no_metadata)
+            res["list_attached_role_policies"] = self.iam_enum_list_attached_role_policies(iam_client=iam_client, role_name=self.entity_name, no_metadata=self.no_metadata)
+            res["list_role_policies"] = self.iam_enum_list_role_policies(iam_client=iam_client, role_name=self.entity_name, no_metadata=self.no_metadata)
 
+        self._deactivate_iam_user_or_role()
         logger.success(f"IAM discovery finished {Emoji('popcorn')}")
+        return res
 
     @staticmethod
-    def iam_enum_get_account_authorization_details(iam_client) -> None:
+    def iam_enum_get_account_authorization_details(iam_client, no_metadata: bool = False) -> None:
         try:
             everything = iam_client.get_account_authorization_details()
             logger.success(f"IAM get_account_authorization_details worked!")
-            logger.success(json.dumps(everything, indent=4, default=str))
+            if no_metadata : AWS_profile.remove_response_metadata(resp=everything)
+            #TODO: handle when size too big
+            #logger.success(json.dumps(everything, indent=4, default=str))
+            return everything
         except Exception as e:
             logger.error(f"Failed to interrogate IAM get_account_authorization_details() : \n{str(e)}")
+            return e
 
     def get_iam_entity_to_remove(self) -> EntityTypeEnum:
         """
@@ -242,34 +260,67 @@ class AWS_profile:
                                                   search_type="str",
                                                   is_substring=True,
                                                   pattern=entity_to_remove.value)
+        # As all calls are already performed before BF, exclude those functions for future BF
+        self.services.deactivate_service_function(service_name="iam",
+                                                  search_type="str",
+                                                  is_substring=True,
+                                                  pattern=self.entity_type.value)
+
+    def write_iam_results_at_the_end(self, iam_results: dict):
+        """
+            As BF creates all files at the end, it will erase IAM scan of the beginning.
+            So we handled the results and paste them after BF finished.
+        """
+        output_folder = Path(__file__).parent / self.output_folder_name / self.boto_session.region_name
+        filename = output_folder / f"iam.json"
+
+        if not output_folder.exists():
+            output_folder.mkdir(parents=True)
+        
+        if not filename.exists():
+            filename.write_text(json.dumps(iam_results, indent=4, sort_keys=True, default=str))
+        else:
+            with filename.open('r') as f:
+                file_content = json.loads(f.read())
+            for key in iam_results.keys():
+                file_content["iam"][key] = iam_results[key]
+            filename.write_text(json.dumps(file_content, indent=4, sort_keys=True, default=str))
 
     ##########################################
     ###### ROLE FUNCTIONS
     ##########################################
     @staticmethod
-    def iam_enum_get_role(iam_client, role_name: str) -> Union[str, None]:
+    def iam_enum_get_role(iam_client, role_name: str, no_metadata: bool = False) -> Union[str, dict]:
         try:
             #TODO : find a role that can do this to test
+            #TODO : Handle if response too long ???
             role = iam_client.get_role(RoleName=role_name)
+            if no_metadata : AWS_profile.remove_response_metadata(resp=role)
             logger.success(f"get_role() worked!")
-            logger.success(f"{json.dumps(role, indent=4, default=str)}")
+            # logger.success(f"{json.dumps(role, indent=4, default=str)}")
+            return role
         except Exception as e:
             logger.error(f"Failed to interrogate IAM get_role() : \n{str(e)}")
+            return str(e)
 
     @staticmethod
-    def iam_enum_list_attached_role_policies(iam_client, role_name: str) -> Union[str, None]:
+    def iam_enum_list_attached_role_policies(iam_client, role_name: str, no_metadata: bool = False) -> Union[str, None]:
         try:
             # TODO : find a role that can do this to test
             role_policies = iam_client.list_attached_role_policies(RoleName=role_name)
+            if no_metadata : AWS_profile.remove_response_metadata(resp=role_policies)
             for policy in role_policies["AttachedPolicies"]:
                 logger.success(f"Policy Name & ARN [{policy['PolicyName']}] : {policy['PolicyArn']}")
+            return role_policies
         except Exception as e:
             logger.error(f"Failed to interrogate IAM list_attached_role_policies() : \n{str(e)}")
+            return str(e)
 
     @staticmethod
-    def iam_enum_list_role_policies(iam_client, role_name: str) -> None:
+    def iam_enum_list_role_policies(iam_client, role_name: str, no_metadata: bool = False) -> None:
         try:
             role_policies = iam_client.list_role_policies(RoleName=role_name)
+            if no_metadata : AWS_profile.remove_response_metadata(resp=role_policies)
             logger.success(f"IAM list_role_policies worked!")
             logger.info(f"Role {role_name} has {len(role_policies['PolicyNames'])} inline policies")
             # List all policies, if present.
@@ -277,14 +328,16 @@ class AWS_profile:
                 logger.success(f"Policy : {policy}")
         except botocore.exceptions.ClientError as err:
             logger.error(f"Failed to interrogate IAM list_role_policies() : \n{str(err)}")
+            return str(e)
 
     ##########################################
     ###### USER FUNCTIONS
     ##########################################
     @staticmethod
-    def iam_enum_get_user(iam_client) -> Union[str, None]:
+    def iam_enum_get_user(iam_client, no_metadata: bool = False) -> Union[str, dict]:
         try:
             user = iam_client.get_user()
+            if no_metadata : AWS_profile.remove_response_metadata(resp=user)
             logger.success(f"IAM get_user worked!")
             logger.success(json.dumps(user, indent=4, default=str))
             if 'UserName' not in user['User']:
@@ -292,55 +345,66 @@ class AWS_profile:
                     logger.success(f"Found root credentials {Emoji('1st_place_medal')}! \n{user['User']['Arn']}")
                 else:
                     logger.error("Unexpected iam.get_user() response: %s" % user)
-            else:
-                return user['User']['UserName']
+            # else: return user['User']['UserName']
+            return user
         except Exception as e:
             logger.error(f"Failed to interrogate IAM get_user() : \n{str(e)}")
+            return str(e)
 
     @staticmethod
-    def iam_enum_list_attached_user_policies(iam_client, username: str) -> None:
+    def iam_enum_list_attached_user_policies(iam_client, username: str, no_metadata: bool = False) -> Union[str, dict]:
         try:
             user_policies = iam_client.list_attached_user_policies(UserName=username)
+            if no_metadata : AWS_profile.remove_response_metadata(resp=user_policies)
             logger.success(f"IAM list_attached_user_policies worked!")
             logger.info(f"User {username} has {len(user_policies['AttachedPolicies'])} policies")
             for policy in user_policies['AttachedPolicies']:
                 logger.success(f"Policy Name & ARN : {policy['PolicyName']} [{policy['PolicyArn']}]")
+            return user_policies
         except botocore.exceptions.ClientError as err:
             logger.error(f"Failed to interrogate IAM list_attached_user_policies() : \n{str(err)}")
+            return str(err)
 
     @staticmethod
-    def iam_enum_list_user_policies(iam_client, username: str) -> None:
+    def iam_enum_list_user_policies(iam_client, username: str, no_metadata: bool = False) -> Union[str, dict]:
         try:
             user_policies = iam_client.list_user_policies(UserName=username)
+            if no_metadata : AWS_profile.remove_response_metadata(resp=user_policies)
             logger.success(f"IAM list_user_policies worked!")
             logger.info(f"User {username} has {len(user_policies['PolicyNames'])} inline policies")
             # List all policies, if present.
             for policy in user_policies['PolicyNames']:
                 logger.success(f"Policy : {policy}")
+            return user_policies
         except botocore.exceptions.ClientError as err:
             logger.error(f"Failed to interrogate IAM list_user_policies() : \n{str(err)}")
+            return str(err)
 
     @staticmethod
-    def iam_enum_list_groups_for_user(iam_client, username: str) -> Union[dict, None]:
+    def iam_enum_list_groups_for_user(iam_client, username: str, no_metadata: bool = False) -> Union[str, dict]:
         try:
             user_groups = iam_client.list_groups_for_user(UserName=username)
+            if no_metadata : AWS_profile.remove_response_metadata(resp=user_groups)
             logger.success(f"IAM list_groups_for_user worked!")
             logger.info(f"User {username} has {len(user_groups['Groups'])} groups associated")
             return user_groups
         except botocore.exceptions.ClientError as err:
             logger.error(f"Failed to interrogate IAM list_groups_for_user() : \n{str(err)}")
+            return str(err)
 
     @staticmethod
-    def iam_enum_list_group_policies(iam_client, user_groups: dict) -> Union[dict, None]:
+    def iam_enum_list_group_policies(iam_client, user_groups: dict, no_metadata: bool = False) -> dict:
+        res = {}
         for group in user_groups['Groups']:
             group_name = group['GroupName']
             try:
                 group_policies = iam_client.list_group_policies(GroupName=group_name)
+                if no_metadata : AWS_profile.remove_response_metadata(resp=group_policies)
                 logger.success(f"IAM Group {group_name} has {len(group_policies['PolicyNames'])} inline policies : ")
                 for policy in group_policies['PolicyNames']:
                     logger.info(f"---> {policy}")
-                return user_groups
+                res[group_name] = group_policies
             except botocore.exceptions.ClientError as err:
                 logger.error(f"Failed to interrogate IAM list_group_policies() : \n{str(err)}")
-
-
+                res[group_name] = str(err)
+        return res
