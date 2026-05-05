@@ -56,7 +56,7 @@ class AWS_profile:
         logger.success(f"Arn : {self.arn}\nEntity_type : {self.entity_type} {Emoji('boom')}{Emoji('sweat_drops')}\nEntity_name : {self.entity_name} {Emoji('speech_balloon')}")
         self.output_folder_name = AWS_profile.get_arn_safe_linux(arn=self.arn) # Get end of Arn which is human-readable and remove '/' inside
         self.services: Services = Services()
-        self.no_metadata: Services = no_metadata
+        self.no_metadata: bool = no_metadata
 
         # avoid calling IAM role function if we are user and vice versa
         self.update_dynamically_services_functions()
@@ -220,7 +220,8 @@ class AWS_profile:
             res["list_user_policies"] = self.iam_enum_list_user_policies(iam_client=iam_client, username=self.entity_name, no_metadata=self.no_metadata)
             res["list_groups_for_user"] = user_groups = self.iam_enum_list_groups_for_user(iam_client=iam_client, username=self.entity_name, no_metadata=self.no_metadata)
 
-            if user_groups is not None:
+            # verify that user_groups is dict so last call returned something and not an error
+            if user_groups is not None and isinstance(user_groups, dict):
                 self.iam_enum_list_group_policies(iam_client=iam_client, user_groups=user_groups)
         else:
             res["get_role"] = self.iam_enum_get_role(iam_client=iam_client, role_name=self.entity_name, no_metadata=self.no_metadata)
