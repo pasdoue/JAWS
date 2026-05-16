@@ -19,7 +19,6 @@ dependencies = [
     "boto3",
     "botocore",
     "numpy",
-    "bs4",
     "requests",
 ]
 dynamic = ["version"]

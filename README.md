@@ -1,16 +1,29 @@
 ## General
 
-This project has been released because, impossible to find robust library for brute forcing AWS IAM rights.
+This project has been released because, impossible to find robust library for brute forcing AWS rights.  
+They have different flaws : too much running time / does not test everything
 
-Tested those two projects but does not output same results... :  
-https://github.com/andresriancho/enumerate-iam  
-https://github.com/carlospolop/bf-aws-permissions  
+Tested projects :  
+- https://github.com/andresriancho/enumerate-iam  
+- https://github.com/carlospolop/bf-aws-permissions  
+- https://github.com/peass-ng/CloudPEASS
 
-## Information
+## Important Information
 
-**This code can take a while (up to 6min for total BF).**
+> This tool is developed on my free time by myself only.  
+It's possible that you encounter issues even if I try to test as much as possible all possible configurations...  
+Feel free to report an issue or suggest a PR 🍻
 
-This code is using official boto library and load dynamically all subfunctions of every services of boto (ie : iam,ec2...)
+This code is using official **boto3** library and load **dynamically** all services (ie : iam,ec2...) and all associated functions (ie : ec2.list_images_in_recycle_bin and so on) of boto3  
+**So even if boto3 is updated, this tool remains up to date !! 😉**  
+
+### When first launch it may takes around 4min30 because needs to map all boto functions !!   
+### After that it runs up to **7min for total BF** with fiber connection (**still twice faster than other tools 🏎😉**)
+
+At the end, when you see this message : "Please wait for threads to exit properly..." you can kill prog if you want (just verify output folder is well populated).  
+Something get stuck while finishing and I couldn't identify why or what is the real bottleneck... 
+
+## Setup
 
 1. Set your creds & config inside files : https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
 
@@ -59,8 +72,9 @@ python3 -m pip install -e .
 ⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
-usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--export-services] [--update-regions]
-               [-r [PARAMETER ...]] [-b [PARAMETER ...]] [-w [PARAMETER ...]] [--no-metadata] [--no-banner] [-p] [--unsafe-mode] [-v]
+usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--update-services]
+               [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]
+               [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [--list-partitions] [--unsafe-mode] [-v]
 
 Bruteforce AWS rights with boto3
 
@@ -74,27 +88,36 @@ options:
                         Number of threads to use
   --thread-timeout THREAD_TIMEOUT
                         Timeout consumed before killing thread
-  --export-services     Export all boto3 services and associated functions to file
-  --update-regions      Update remotely list of AWS regions (official web doc of AWS)
-  -r, --regions [PARAMETER ...]
+  --update-services     Force to update list of services and associated functions. This file saves time to avoid reparsing all services/functions/functions_args...
+  -r, --regions [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]
                         Specify regions to scan
-  -b, --black-list [PARAMETER ...]
+  -b, --black-list [SERVICES ...]
                         List of services to remove separated by comma. Launch script with -p to see services
-  -w, --white-list [PARAMETER ...]
+  -w, --white-list [SERVICES ...]
                         List of services to whitelist/scan separated by comma. Launch script with -p to see services
-  --no-metadata         Do not retrieve metadata of all AWS SDK calls
-  --no-banner           Do not print banner
+  --metadata            Retrieve metadata of all AWS SDK functions calls
   -p, --print-services  List of all available services
+  --list-partitions     Partition to use (upper level of regions - which is not documented but found by reversing SDK)
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
 ```
 
 ## How does it works ? 
 
-1. Take up to date list of availables regions inside AWS according to : https://docs.aws.amazon.com/global-infrastructure/latest/regions/aws-regions.html
-Feel free to add some regions of your own after script created the file "regions.json". If not you wont be able to scan those regions as script wont let you
+> Disclaimer : Part described bellow came from a session where I decided to reverse python SDK to understand how to stay up to date about AWS regions.
 
-2. Script begin always by loading all services and functions available in SDK. So ti is always up to date (does not slow down tool either).
+Everyone knows about AWS regions, but I discovered that only half true...  
+According to SDK code, there is an upper level than regions which is called "partition".  
+So every "partition" get a list of "regions" and each regions has a bundle of available "services" which have also it's own a bundle of available "functions".    
+
+In summary : partition > regions > services > functions
+
+The well known "regions" that everybody knows is part of a partition called "aws"  
+All those information can be seen inside : .venv/lib/python3.14/site-packages/botocore/data/endpoints.json  
+
+1. To stay up to date according to declared "partitions" and "regions" of SDK, the script read those information from "endpoints.json" (complete path just upper). 
+
+2. Script begin always by loading all services and functions available in SDK. So it is always up to date (take about 4min30).
 
 3. Perform equivalent of `aws sts get_caller_identity` to retrieve ARN (identity of the token)
 Examples : 
@@ -102,21 +125,34 @@ arn:aws:sts::718896642544:assumed-role/web01/i-0d925034be5d2f45b
 arn:aws:iam::718896642544:user/lucifer
 
 4. From ARN we can know if we are a "user" or a "role".
-So we will call the following function : 
-User : 
-get_account_authorization_details
-get_user
-list_attached_user_policies
-list_user_policies
-list_groups_for_user
-list_group_policies
+So we will call the following IAM function :  
 
-Role : 
-get_role
-list_attached_role_policies
-list_role_policies
+If we are User :  
+- get_account_authorization_details
+- get_user
+- list_attached_user_policies
+- list_user_policies
+- list_groups_for_user
+- list_group_policies
+  
+If we are Role :  
+- get_role
+- list_attached_role_policies
+- list_role_policies
 
 5. Once those information retrieved, it performs brute force on whatever endpoint you tell it to
+
+A. Performs call to endpoints that **do not require** some **parameters** to works.  
+Doing so, we hope to **retrieve some artifacts** by performing som list_ or get_ functions (**loot** is life !!).
+
+B. If we **loot some artifacts** we try to call every functions with required parameters.  
+We check **all "keys"** of loot and compare them to functions parameters.  
+**Only if all params can be "injected"** :
+- easy to handle on one param
+- not coded yet for multiple ones :/
+
+6. Find your loot inside generated directory : \<role>/\<region>/\<service>.json  
+Path is indicated on terminal/logs at the end of scan, you may have to scroll up a little
 
 ## Commands cheat sheet
 
@@ -125,9 +161,19 @@ Launch scan on all services :
 python3 main.py
 ```
 
-Launch scan on all services without metadata : 
+Launch scan on all services and retrieve metadata (deactivated by default) : 
 ```bash
-python3 main.py --no-metadata
+python3 main.py --metadata
+```
+
+Force an update of all boto3 services/functions/functions_params mapping (can be slow) : 
+```bash
+python3 main.py --update-services
+```
+
+List partitions : 
+```bash
+python3 main.py --list-partitions
 ```
 
 Spawn script without banner (bye bye sharky :/) : 
@@ -188,11 +234,15 @@ python3 main.py --unsafe-mode
 - [X] Allow specific service/function hooking
 - [X] Performs some IAM checks before and avoid some useless calls (that can also trigger alerts)
 - [X] Remove metadata from SDK response (better clarity & less storage used)
-- [X] Put first IAM checks & results after BF performed (also check why thos calls are performed as they should be deactivated for BF phase)
+- [X] Put first IAM checks & results after BF performed (also check why those calls are performed as they should be deactivated for BF phase)
+- [X] Check if function as "OwnerIds" in params and then replace it with "self" to avoid false positive
+- [X] Detect all params of a function (by parsing __doc__ strings, couldn't find another way to do it)
+- [X] First call functions with no required params and then those with params (and try to replace params with previous collected artefacts)
 
 ## TBD : 
 
-- [ ] Perform list_ before get_ or describe_
+- [ ] Some parameters of some particular functions are not well retrieved (WTF ><) : lucifer elasticbeanstalk describe_environment_managed_action_history 
+- [ ] Handle multiple args replacement
 - [ ] Detect if some results will be erased and trigger a warning if different from previous run
 - [ ] Maybe chunk output json files that are too big (but make it optional)
 

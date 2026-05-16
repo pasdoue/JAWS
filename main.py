@@ -17,9 +17,11 @@ import numpy as np
 from itertools import zip_longest
 
 from AWS_profile import AWS_profile
-from libs.Regions import Regions
+from libs.Partitions import Partition_Manager
 from libs.User import User_config
 from libs.Services import Services, Service
+
+partitions_mngr = Partition_Manager()
 
 def print_banner() -> None:
     banners = []
@@ -141,35 +143,38 @@ def print_services(services: Services) -> None:
     logger.info(f"Total number of functions avoided inside active service : {not_activated_function_in_activated_services}")
 
 def parse_args() -> argparse.Namespace:
-    regions_choices = Regions.load_filemap()
-    regions_choices.append("all")
+    global partitions_mngr
 
-    parser = argparse.ArgumentParser(description='Bruteforce AWS rights with boto3')
+    all_regions = partitions_mngr.list_regions(get_all=True)
+    regions_choices = [r.name for r in all_regions] + ["all"]
+
+    parser = argparse.ArgumentParser(description='Bruteforce AWS rights with boto3', epilog=print_banner()) #little hack to print banner on help menu. Do not return str because if so, the rest of help message wont print...
     parser.add_argument('--credentials-file', default=User_config.default_credentials_file_path,
                         help='AWS credentials file')
     parser.add_argument('--config-file', default=User_config.default_config_file_path, help='AWS config file')
     parser.add_argument('-t', '--threads', type=int, default=75, help='Number of threads to use')
     parser.add_argument('--thread-timeout', type=int, default=30, help='Timeout consumed before killing thread')
-    parser.add_argument('--export-services', action="store_true", default=False,
-                        help='Export all boto3 services and associated functions to file')
-    parser.add_argument('--update-regions', action="store_true", default=False,
-                        help='Update remotely list of AWS regions (official web doc of AWS)')
-    parser.add_argument('-r', '--regions', nargs='*',
+    parser.add_argument('--update-services', action="store_true", default=False,
+                        help='Force to update list of services and associated functions. This file saves time to avoid reparsing all services/functions/functions_args...')
+    parser.add_argument('-r', '--regions',
+                        nargs='*',
                         choices=regions_choices,
-                        help='Specify regions to scan',
-                        metavar='PARAMETER')
+                        help='Specify regions to scan')
     parser.add_argument('-b', '--black-list', nargs='*',
                         default="cloudhsm cloudhsmv2 sms sms-voice.pinpoint",
                         help='List of services to remove separated by comma. Launch script with -p to see services',
-                        metavar='PARAMETER')
+                        metavar='SERVICES')
     parser.add_argument('-w', '--white-list', nargs='*',
                         default=[],
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
-                        metavar='PARAMETER')
-    parser.add_argument('--no-metadata', action="store_true", default=True, help='Do not retrieve metadata of all AWS SDK calls')
-    parser.add_argument('--no-banner', action="store_true", default=False, help='Do not print banner')
+                        metavar='SERVICES')
+    parser.add_argument('--metadata', action="store_true", default=False, help='Retrieve metadata of all AWS SDK functions calls')
+    #TODO: FIXME
+    #parser.add_argument('--no-banner', action="store_true", default=False, help='Do not print banner')
     parser.add_argument('-p', '--print-services', action="store_true", default=False,
                         help='List of all available services')
+    parser.add_argument('--list-partitions', action="store_true", default=False,
+                        help='Partition to use (upper level of regions - which is not documented but found by reversing SDK)')
     parser.add_argument('--unsafe-mode', action="store_true", default=False,
                         help='Perform potentially destructive functions. Disabled by default.')
     parser.add_argument("-v", "--verbose", action="count", default=0,
@@ -180,21 +185,18 @@ if __name__ == "__main__":
 
     start = time.time()
 
-    Regions.update_filemap(force=False)
-
     args = parse_args()
     set_logger(level=args.verbose)
 
-    print(args.no_banner)
-    if not args.no_banner:
-        print_banner()
+    # TODO: FIXME
+    # if not args.no_banner:
+    #     print_banner()
 
-    if args.update_regions:
-        Regions.update_filemap(force=True)
+    if args.list_partitions:
+        partitions_mngr.pprint_partitions()
 
-    regions_to_scan = None
     if args.regions:
-        regions_to_scan = Regions.verify_region_exists(input_region=args.regions)
+        regions_to_scan = partitions_mngr.verify_region_exists(input_region=args.regions)
 
         settings_list = [ User_config.load(config_file_path=args.config_file,
                                            credentials_file_path=args.credentials_file,
@@ -205,18 +207,18 @@ if __name__ == "__main__":
 
     for curr_settings in settings_list:
 
-        aws_profile = AWS_profile(creds=curr_settings)
+        aws_profile = AWS_profile(creds=curr_settings, metadata=args.metadata)
+
+        if args.update_services:
+            aws_profile.update_dynamically_services_functions()
+            print_elapsed_time(start=start)
+            start = time.time()
 
         iam_res = aws_profile.iam_enum()
 
         verify_unsafe(unsafe=args.unsafe_mode, aws_profile=aws_profile)
         aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
         aws_profile.services.calculate_safe_mode()
-
-        if args.export_services:
-            aws_profile.save_to_filemap()
-            print_elapsed_time(start=start)
-            start = time.time()
 
         if args.print_services:
             print_services(services=aws_profile.services)

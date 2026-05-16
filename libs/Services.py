@@ -1,8 +1,19 @@
 import re
-from typing import List, Union
+from typing import List, Optional, Union
 
 from settings import Config
 
+
+class Parameter:
+    """
+        Class to retrieve each potential parameter of the boto3 current function
+        Will allow to use functions like describe_ / get_ and so on
+
+        Also no types are returned from signature introspection... So we can just assume
+    """
+    def __init__(self, name: str, required: bool = False):
+        self.name = name
+        self.required = required
 
 class Function:
     """
@@ -10,9 +21,42 @@ class Function:
         for example : list-policies (inside iam service)
     """
 
-    def __init__(self, name: str, activated: bool = True):
+    def __init__(self, name: str, parameters: List[Parameter], activated: bool = True):
         self.name = name
         self.activated = activated
+        self.parameters = parameters
+
+    def get_params(self, required_params_only: bool = False) -> List[str]:
+        if not self.parameters:
+            return []
+        else:
+            if required_params_only:
+                return [p.name for p in self.parameters if p.required]
+            else:
+                return [p.name for p in self.parameters]
+
+    @staticmethod
+    def parse_boto_docstring(docstr: str) -> Union[None|List[Parameter]]:
+        params = []
+        for line in docstr.splitlines():
+            if line.startswith(":param"):
+                param_name = line.split(":")[1].split()[1]
+                is_required = False if not "[REQUIRED]" in line else True
+                params.append(Parameter(name=param_name, required=is_required))
+            elif line.startswith(":rtype:"):
+                break
+        return params if params else None
+
+    def has_no_required_params(self) -> bool:
+        if not self.parameters:
+            return True
+        if any([p.required for p in self.parameters]):
+            return False
+        return True
+
+    def hash_ownerid_param(self) -> bool:
+        return any([p.name == "OwnerIds" for p in self.parameters])
+
 
 
 class Service:
@@ -39,17 +83,47 @@ class Service:
                 self.nb_activated_functions += 1
         self.nb_not_activated_functions = self.nb_functions - self.nb_activated_functions
 
-    def get_functions(self, active_only: bool = True) -> List[Function]:
+    def get_functions(self, active_only: bool = True,
+                      no_params_required: bool = False,
+                      only_begin: Optional[List[str]] = None,
+                      exclude_begin: Optional[List[str]] = None) -> List[Function]:
         """
-            Return only functions that are activated
+            Return functions according to multiple possible criterias
+            :param active_only: retrieve only active functions
+            :param no_params_required: allow to retrieve function that do not require params
+            :param only_begin: Filter result by giving a list of begin function pattern (ex: list_, get_...)
+            :param exclude_begin: Same as above but exclude pattern
         """
+        funcs = self.functions
+        # Filter by activation
         if active_only:
-            return [function for function in self.functions if function.activated]
-        else:
-            return [function for function in self.functions]
+            if no_params_required:
+                funcs = [f for f in funcs if f.activated and f.has_no_required_params()]
+            else:
+                funcs = [f for f in funcs if f.activated]
 
+        # Normalize patterns (lowercase once)
+        only_begin = [p.lower() for p in only_begin] if only_begin else None
+        exclude_begin = [p.lower() for p in exclude_begin] if exclude_begin else None
+
+        # Apply whitelist (only_begin)
+        if only_begin:
+            if no_params_required:
+                funcs = [ f for f in funcs if any(f.name.lower().startswith(p) for p in only_begin) and f.has_no_required_params() ]
+            else:
+                funcs = [f for f in funcs if any(f.name.lower().startswith(p) for p in only_begin)]
+
+        # Apply blacklist (exclude_begin)
+        if exclude_begin:
+            if no_params_required:
+                funcs = [ f for f in funcs if not any(f.name.lower().startswith(p) for p in exclude_begin) and f.has_no_required_params() ]
+            else:
+                funcs = [ f for f in funcs if not any(f.name.lower().startswith(p) for p in exclude_begin) ]
+        return funcs
 
 class Services:
+
+    FILE_MAP = Config.SERVICES_FILE_MAPPING
 
     def __init__(self, safe_mode: bool = True) -> None:
         self.safe_mode = safe_mode # by default is True to avoid wrong behaviors
@@ -71,7 +145,7 @@ class Services:
         else:
             return [service for service in self.services]
 
-    def get_services_names(self, active_only: bool = True) -> Union[None|List[str]]:
+    def get_services_names(self, active_only: bool = True) -> Optional[List[str]]:
         """
             Return only list of services names
         """
@@ -80,13 +154,16 @@ class Services:
         else:
             return [service.name for service in self.get_services(active_only=False)] if len(self.get_services(active_only=False)) > 0 else None
 
-    def deactivate_service_function(self, service_name: str, search_type: str = "str", pattern="", is_substring: bool = False):
+    def deactivate_service_function(self, service_name: str,
+                                    search_type: str = "str",
+                                    pattern: str="",
+                                    is_substring: bool = False):
         """
             Function to deactivate specific(s) function(s) by pattern (can be strict / light comparison or regex)
             :param service_name: name of service to scan
-            :param service_type: can be "str" or "regex"
+            :param search_type: can be "str" or "regex"
             :param pattern: pattern to search
-            :param is_subtring: In case we are in "str" search, allow "light" comparison". If not set, strict comparison is performed
+            :param is_substring: In case we are in "str" search, allow "light" comparison". If not set, strict comparison is performed
         """
         for service in self.get_services(active_only=True):
             if service.name == service_name:
