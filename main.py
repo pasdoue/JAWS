@@ -141,6 +141,10 @@ def print_services(services: Services) -> None:
     logger.info(f"Total number of activated services : [{len(activated_services)}/{len(all_services)}]")
     logger.info(f"Total number of call to perform : [{call_to_perform}/{total_api_calls}]")
     logger.info(f"Total number of functions avoided inside active service : {not_activated_function_in_activated_services}")
+    if len(activated_services) == len(all_services):
+        logger.warning(f"+------------------------------------------------------------------+")
+        logger.warning(f"| /!\\    You're about to launch discovery on ALL services      /!\\ |")
+        logger.warning(f"+------------------------------------------------------------------+")
 
 def parse_args() -> argparse.Namespace:
     global partitions_mngr
@@ -168,14 +172,14 @@ def parse_args() -> argparse.Namespace:
                         default=[],
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
                         metavar='SERVICES')
-    parser.add_argument('--metadata', action="store_true", default=False, help='Retrieve metadata of all AWS SDK functions calls')
+    parser.add_argument('--metadata', action="store_true", help='Retrieve metadata of all AWS SDK functions calls')
     #TODO: FIXME
     #parser.add_argument('--no-banner', action="store_true", default=False, help='Do not print banner')
-    parser.add_argument('-p', '--print-services', action="store_true", default=False,
+    parser.add_argument('-p', '--dont-print-services', action="store_true",
                         help='List of all available services')
-    parser.add_argument('--list-partitions', action="store_true", default=False,
+    parser.add_argument('--list-partitions', action="store_true",
                         help='Partition to use (upper level of regions - which is not documented but found by reversing SDK)')
-    parser.add_argument('--unsafe-mode', action="store_true", default=False,
+    parser.add_argument('--unsafe-mode', action="store_true",
                         help='Perform potentially destructive functions. Disabled by default.')
     parser.add_argument("-v", "--verbose", action="count", default=0,
                         help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
@@ -220,7 +224,7 @@ if __name__ == "__main__":
         aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
         aws_profile.services.calculate_safe_mode()
 
-        if args.print_services:
+        if not args.dont_print_services:
             print_services(services=aws_profile.services)
             print_elapsed_time(start=start)
             start = time.time()

@@ -96,7 +96,8 @@ options:
   -w, --white-list [SERVICES ...]
                         List of services to whitelist/scan separated by comma. Launch script with -p to see services
   --metadata            Retrieve metadata of all AWS SDK functions calls
-  -p, --print-services  List of all available services
+  -p, --dont-print-services
+                        List of all available services
   --list-partitions     Partition to use (upper level of regions - which is not documented but found by reversing SDK)
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
@@ -181,7 +182,7 @@ Spawn script without banner (bye bye sharky :/) :
 python3 main.py --no-banner
 ```
 
-Show list of available services : 
+Dont print list of available services : 
 ```bash
 python3 main.py -p
 ```
