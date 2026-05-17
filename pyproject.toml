@@ -5,10 +5,10 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "JAWS"
 authors = [
-  {name = "pasdoue", email = "pasdoue@mail.com"},
+  {name = "pasdoue", email = "pasdoue@protonmail.com"},
 ]
 maintainers = [
-  {name = "pasdoue", email = "pasdoue@mail.com"}
+  {name = "pasdoue", email = "pasdoue@protonmail.com"}
 ]
 
 description = "AWS IAM bruteforcer"
