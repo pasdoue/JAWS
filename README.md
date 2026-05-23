@@ -72,14 +72,15 @@ python3 -m pip install -e .
 ⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
-usage: main.py [-h] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--update-services]
+usage: main.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--update-services]
                [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]
-               [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [--list-partitions] [--unsafe-mode] [-v]
+               [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [-v]
 
 Bruteforce AWS rights with boto3
 
 options:
   -h, --help            show this help message and exit
+  --no-banner           Do not print banner
   --credentials-file CREDENTIALS_FILE
                         AWS credentials file
   --config-file CONFIG_FILE
@@ -98,6 +99,7 @@ options:
   --metadata            Retrieve metadata of all AWS SDK functions calls
   -p, --dont-print-services
                         List of all available services
+  -s, --skip-iam        Don't perform IAM check
   --list-partitions     Partition to use (upper level of regions - which is not documented but found by reversing SDK)
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
@@ -180,6 +182,11 @@ python3 main.py --list-partitions
 Spawn script without banner (bye bye sharky :/) : 
 ```bash
 python3 main.py --no-banner
+```
+
+Do not perform "intelligent IAM check" (can be useful when only want to print services stats) : 
+```bash
+python3 main.py --skip-iam
 ```
 
 Dont print list of available services : 

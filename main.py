@@ -1,9 +1,8 @@
-import random
+import asyncio
 import sys
 import argparse
 import time
 
-import logging
 from typing import List
 
 from R2Log import logger, console
@@ -14,49 +13,15 @@ from rich.prompt import Confirm
 import threading
 import queue
 import numpy as np
-from itertools import zip_longest
 
 from AWS_profile import AWS_profile
 from libs.Partitions import Partition_Manager
 from libs.User import User_config
-from libs.Services import Services, Service
+from libs.Services import print_services, Service
+
+from utils import print_banner, print_elapsed_time, set_logger
 
 partitions_mngr = Partition_Manager()
-
-def print_banner() -> None:
-    banners = []
-    banners.append("""
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣀⣀⣀⣀⡀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⢠⣤⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣿⣿⣿⡿⠟⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣶⡌⠉⠉⠉⠉⠉⠉⣹⣿⣦⡄
-⠀⠀⣿⣿⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡼⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠛⠀⠀⢀⣴⣯⣴⣿⣿⣿⣿⠁
-⠀⠀⠸⣿⣿⣷⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣴⣿⣿⣿⣿⣿⣿⡿⠃⠀
-⠀⠀⠀⢻⣿⣿⣿⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠞⠛⠋⠉⠙⠛⠻⢿⡟⣿⣿⣿⣿⠻⠁⠀⠀        ██╗ █████╗ ██╗    ██╗███████╗
-⠀⠀⠀⠘⣿⣿⣿⣿⣦⠀⠀⠀⠀⠀⡸⠷⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣆⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⢉⣷⣶⣶⣤⣄⢸⡿⠙⠁⠀⠀⠀⠀        ██║██╔══██╗██║    ██║██╔════╝
-⠀⠀⠀⠀⣿⣿⣭⣬⣤⣤⣤⣄⣀⣀⣀⣀⣀⣀⢤⠤⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⢸⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⣿⣿⣿⣿⠎⠀⠀⠀⠀⠀⠀⠀        ██║███████║██║ █╗ ██║███████╗
-⠀⠀⠀⣸⣿⣿⣿⣿⠻⠛⠛⠿⡿⣿⣿⣿⣿⣾⣤⣀⣀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣾⣿⣿⣿⣷⣦⣄⣀⣀⣠⣤⣶⣿⣿⣿⣿⣿⡿⠛⠁⠀⠀⠀⠀⠀⠀⠀⠀        ██║██╔══██║██║███╗██║╚════██║
-⠀⠀⣴⣿⣿⣿⠻⠈⠀⠀⠀⠀⠀⠈⠉⠛⠟⡿⢿⠿⡛⣘⣤⣤⣶⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⠟⠋⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀   ╚█████╔╝██║  ██║╚███╔███╔╝███████║
-⠀⢠⣿⣿⠻⠈⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣦⣶⣿⣿⣿⣿⣿⡿⠿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣷⣦⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀    ╚════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚══════╝
-⠐⠛⠙⠈⠀⠀⠀⠀⠀⢀⣄⣦⣶⠿⠿⠿⠛⠛⠛⠉⠉⠉⠀⠀⠀⠘⠛⠻⠿⠿⠿⠿⠟⠛⠛⠙⠉⠁⠀⠈⠉⠛⠿⣿⣿⣿⣷⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠈⠉⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠈⠙⠛⠿⠄⠀⠀⠀⠀⠀⠀⠀⠀⠀Made by pasdoue
-""")
-    banners.append("""
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⣠⣤⣤⠶⠶⠶⠶⠾⠛⠛⠛⠛⠛⠛⠛⢿
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣶⣿⣛⠛⠛⠛⠓⠢⢄⡀⠀⠤⠟⠂⠀⠀⠀⠀⠀⠀⢀⡿        ██╗ █████╗ ██╗    ██╗███████╗
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⠾⠛⠉⠑⠤⣙⢮⡉⠓⣦⣄⡀⠀⣹⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⠃        ██║██╔══██╗██║    ██║██╔════╝
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣤⡶⠞⠋⠉⠀⠀⠀⠀⠀⠀⠒⠛⠛⠛⠉⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⢰⡟⠀        ██║███████║██║ █╗ ██║███████╗
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡴⠾⠛⠉⣡⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⢺⢿⢉⡽⡟⢓⣶⠦⢤⣀⡀⠈⠳⣿⠁⠀        ██║██╔══██║██║███╗██║╚════██║
-⠀⠀⠀⠀⠀⠀⠀⠀⣀⡴⠟⠁⠀⠀⣀⣴⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡤⠚⠁⠀⢛⠛⠛⠻⢷⡧⣾⡴⣛⣏⣹⡇⣀⣿⠀⠀    █████╔╝██║  ██║╚███╔███╔╝███████║
-⠀⠀⠀⠀⠀⠀⣠⠞⠋⠀⣀⠤⠒⢉⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⠔⠋⠀⣀⠴⠚⠛⠛⠯⡑⠂⠀⠀⡏⢹⣿⡾⠟⠋⠁⠀⠀    ╚════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚══════╝
-⠀⠀⠀⠀⣠⠞⠁⠀⠐⠊⠀⠀⢠⡿⠁⠀⢰⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡏⣤⡿⠋⠀⠀⠀⠀⠀⠀⡹⠀⠀⠀⣠⡾⠋⠀⠀⠀⠀⠀⠀
-⠀⠀⣠⡞⠁⠀⠀⠀⠀⠀⠀⢠⡿⠁⢀⢸⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⣷⡞⠋⠉⠉⠓⠒⠢⢤⣴⣥⣆⣠⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀Made by pasdoue
-⠀⣼⠋⠀⠀⠀⠀⠀⠀⠀⢀⡟⠀⠀⢸⠀⡆⢧⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⢽⣦⠀⠀⠀⠀⠀⠀⣟⡿⣽⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⢸⣇⣤⣤⣤⣤⣄⡀⠀⢀⡾⠁⠀⠀⢘⡆⠱⡈⢆⠀⠀⠀⠀⠀⠀⠀⠀⠈⢿⢻⡚⡆⣀⠀⠀⠀⢸⡽⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
-    """)
-    logger.info(random.choice(banners))
 
 def worker(task_queue, aws_profile: AWS_profile, progress, task_progress_ids) -> None:
     """Worker thread function to process tasks from the queue."""
@@ -84,67 +49,6 @@ def verify_unsafe(unsafe: bool, aws_profile: AWS_profile) -> None:
         else:
             logger.warning("Running in unsafe mode.")
             aws_profile.set_unsafe_mode()
-
-def print_elapsed_time(start: time.time) -> None:
-    end = time.time()
-    logger.info(f"Script took : {str(end - start)} seconds")
-
-def set_logger(level: int) -> None:
-    logger.setVerbosity(level)
-    file_handler = logging.FileHandler("logs.txt")
-    formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-    file_handler.setLevel(logger.level)
-    file_handler.setFormatter(formatter)
-
-    # Add the file handler to the logger
-    logger.addHandler(file_handler)
-
-def print_services(services: Services) -> None:
-    """
-        Print services and their associated number of functions.
-        Will display only selected services to estimate the number of calls to perform.
-        (allow estimating if furtivity is in place or not)
-    """
-    call_to_perform = 0
-    not_activated_function_in_activated_services = 0
-
-    repr_array = []
-    activated_services = services.get_services(active_only=True)
-    all_services = services.get_services(active_only=False)
-
-    total_api_calls = sum([len(service.get_functions(active_only=False)) for service in all_services])
-
-    logger.info(f"{Emoji('hamster')} Every service are listed below with it's associated number of functions : ")
-    for service in activated_services:
-        functions_activated = service.get_functions(active_only=True)
-        all_functions = service.get_functions(active_only=False)
-        diff_functions = set(all_functions) - set(functions_activated)
-
-        not_activated_function_in_activated_services += len(diff_functions)
-
-        call_to_perform += len(functions_activated)
-        repr_array.append((service.name, len(functions_activated)))
-
-    PAIRS_PER_ROW = min(len(repr_array),5)  # change to 3, 4, etc.
-
-    # compute column widths
-    name_width = max(len(name) for name, _ in repr_array)
-    num_width = max(len(str(num)) for _, num in repr_array)
-
-    it = iter(repr_array)
-    for group in zip_longest(*[it] * PAIRS_PER_ROW, fillvalue=("", "")):
-        console.print("   ".join(
-            f"{name:<{name_width}} [{num:>{num_width}}]"
-            for name, num in group
-        ), highlight=True)
-
-    logger.info(f"Total number of activated services : [{len(activated_services)}/{len(all_services)}]")
-    logger.info(f"Total number of call to perform : [{call_to_perform}/{total_api_calls}]")
-    logger.info(f"Total number of functions avoided inside active service : {not_activated_function_in_activated_services}")
-    if len(activated_services) == len(all_services):
-        logger.warning(f"+------------------------------------------------------------------+")
-        logger.warning(f"| /!\\    You're about to launch discovery on ALL services      /!\\ |")
-        logger.warning(f"+------------------------------------------------------------------+")
 
 def parse_args() -> argparse.Namespace:
     global partitions_mngr
@@ -181,8 +85,8 @@ def parse_args() -> argparse.Namespace:
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
                         metavar='SERVICES')
     parser.add_argument('--metadata', action="store_true", help='Retrieve metadata of all AWS SDK functions calls')
-    parser.add_argument('-p', '--dont-print-services', action="store_true",
-                        help='List of all available services')
+    parser.add_argument('-p', '--dont-print-services', action="store_true", help='List of all available services')
+    parser.add_argument('-s', '--skip-iam', action="store_true", help='Don\'t perform IAM check')
     parser.add_argument('--list-partitions', action="store_true",
                         help='Partition to use (upper level of regions - which is not documented but found by reversing SDK)')
     parser.add_argument('--unsafe-mode', action="store_true",
@@ -217,11 +121,11 @@ if __name__ == "__main__":
         aws_profile = AWS_profile(creds=curr_settings, metadata=args.metadata)
 
         if args.update_services:
-            aws_profile.update_dynamically_services_functions()
-            print_elapsed_time(start=start)
-            start = time.time()
+            asyncio.run(aws_profile.update_dynamically_services())
+            start = time.time() #reset start time as above took a while
 
-        iam_res = aws_profile.iam_enum()
+        if not args.skip_iam:
+            iam_res = aws_profile.iam_enum()
 
         verify_unsafe(unsafe=args.unsafe_mode, aws_profile=aws_profile)
         aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
@@ -229,7 +133,7 @@ if __name__ == "__main__":
 
         if not args.dont_print_services:
             print_services(services=aws_profile.services)
-            print_elapsed_time(start=start)
+            print_elapsed_time(start_time=start)
             start = time.time()
 
             resp = Confirm.ask(f"Would you like to run script with this config ?", show_choices=True, console=console)
@@ -277,8 +181,9 @@ if __name__ == "__main__":
             for thread in threads:
                 thread.join(timeout=args.thread_timeout)
 
-        aws_profile.write_iam_results_at_the_end(iam_results=iam_res)
+        if not args.skip_iam:
+            aws_profile.write_iam_results_at_the_end(iam_results=iam_res)
 
         logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.boto_session.region_name}")
-        print_elapsed_time(start=start)
+        print_elapsed_time(start_time=start)
         logger.info(f"Please wait for threads to exit properly (even if Ctrl+C should not cause damages to results) {Emoji('hamster')}")

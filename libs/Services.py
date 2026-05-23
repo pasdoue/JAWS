@@ -1,5 +1,9 @@
 import re
-from typing import List, Optional, Union
+from itertools import zip_longest
+from typing import List, Optional
+
+from R2Log import logger, console
+from rich.emoji import Emoji
 
 from settings import Config
 
@@ -36,7 +40,7 @@ class Function:
                 return [p.name for p in self.parameters]
 
     @staticmethod
-    def parse_boto_docstring(docstr: str) -> Union[None|List[Parameter]]:
+    def parse_boto_docstring(docstr: str) -> List[Parameter]:
         params = []
         for line in docstr.splitlines():
             if line.startswith(":param"):
@@ -45,7 +49,7 @@ class Function:
                 params.append(Parameter(name=param_name, required=is_required))
             elif line.startswith(":rtype:"):
                 break
-        return params if params else None
+        return params if params else []
 
     def has_no_required_params(self) -> bool:
         if not self.parameters:
@@ -221,3 +225,51 @@ class Services:
                     else:
                         function.activated = False
             service.update_stats()
+
+
+def print_services(services: Services) -> None:
+    """
+        Print services and their associated number of functions.
+        Will display only selected services to estimate the number of calls to perform.
+        (allow estimating if furtivity is in place or not)
+    """
+    call_to_perform = 0
+    not_activated_function_in_activated_services = 0
+
+    repr_array = []
+    activated_services = services.get_services(active_only=True)
+    all_services = services.get_services(active_only=False)
+
+    total_api_calls = sum([len(service.get_functions(active_only=False)) for service in all_services])
+
+    logger.info(f"{Emoji('hamster')} Every service are listed below with it's associated number of functions : ")
+    for service in activated_services:
+        functions_activated = service.get_functions(active_only=True)
+        all_functions = service.get_functions(active_only=False)
+        diff_functions = set(all_functions) - set(functions_activated)
+
+        not_activated_function_in_activated_services += len(diff_functions)
+
+        call_to_perform += len(functions_activated)
+        repr_array.append((service.name, len(functions_activated)))
+
+    PAIRS_PER_ROW = min(len(repr_array),5)  # change to 3, 4, etc.
+
+    # compute column widths
+    name_width = max(len(name) for name, _ in repr_array)
+    num_width = max(len(str(num)) for _, num in repr_array)
+
+    it = iter(repr_array)
+    for group in zip_longest(*[it] * PAIRS_PER_ROW, fillvalue=("", "")):
+        console.print("   ".join(
+            f"{name:<{name_width}} [{num:>{num_width}}]"
+            for name, num in group
+        ), highlight=True)
+
+    logger.info(f"Total number of activated services : [{len(activated_services)}/{len(all_services)}]")
+    logger.info(f"Total number of call to perform : [{call_to_perform}/{total_api_calls}]")
+    logger.info(f"Total number of functions avoided inside active service : {not_activated_function_in_activated_services}")
+    if len(activated_services) == len(all_services):
+        logger.warning(f"+------------------------------------------------------------------+")
+        logger.warning(f"| /!\\    You're about to launch discovery on ALL services      /!\\ |")
+        logger.warning(f"+------------------------------------------------------------------+")

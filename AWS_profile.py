@@ -1,7 +1,9 @@
+import asyncio
 import importlib
 import inspect
 import json
 import pkgutil
+import time
 from enum import Enum
 from pathlib import Path
 from typing import List, Dict, Union, Any, Tuple, Optional
@@ -17,6 +19,7 @@ from rich.emoji import Emoji
 import meta_aws
 from libs.Services import Services, Service, Function
 from settings import Config
+from utils import print_elapsed_time
 
 
 def get_unique_keys(obj, result=None):
@@ -106,7 +109,7 @@ class AWS_profile:
             self.load_from_filemap()
         else:
             # avoid calling IAM role function if we are user and vice versa
-            self.update_dynamically_services_functions()
+            asyncio.run(self.update_dynamically_services())
 
     @staticmethod
     def get_entity_type_and_name(arn: str) -> Tuple[EntityTypeEnum, str]:
@@ -252,40 +255,48 @@ class AWS_profile:
 
         output_file.write_text(json.dumps(res, indent=4, sort_keys=True, default=str))
 
-    def update_dynamically_services_functions(self):
+    async def update_dynamically_services(self):
         """
             Retrieve boto3 available services and then retrieve all associated functions.
-            Results are saved in a file.
+            Results are saved in a pickl export file to load fast on next run.
         """
-        logger.info("Updating dynamically list of AWS services and associated functions")
-        # if we are user then remove IAM "role" calls, and vice versa
-        iam_entity_to_remove = self.get_iam_entity_to_remove()
-
+        start = time.time()
+        logger.info(f"Updating list of boto3 services and associated functions! Be patient, can take a while {Emoji('pray')}")
+        #iam_entity_to_remove = self.get_iam_entity_to_remove()
         available_services = self.boto_session.get_available_services()
-        for service in available_services:
-            curr_service = Service(name=service)
-            try:
-                boto_service: boto3.session.Session = self.boto_session.client(service_name=curr_service.name)
-            except Exception as e:
-                logger.error(f"Impossible to connect to AWS service : {service}\n{str(e)}")
-                continue
-            for function in dir(boto_service):
-                if not function.startswith("_"):
-                    # remove user or role API in IAM according to current entity type
-                    if not (curr_service.name == "iam" and iam_entity_to_remove.value in function):
-                        func = getattr(boto_service, function)
-                        try:
-                            func_doc = func.__doc__ if hasattr(func, "__doc__") else None
-                            if func_doc is not None:
-                                params = Function.parse_boto_docstring(docstr=str(func_doc))
-                                curr_service.add_function(function=Function(name=function, activated=True, parameters=params))
-                        except TypeError:
-                            pass
-            self.services.add_service(service=curr_service)
+        logger.info(f"Scanning {len(available_services)} services {Emoji('eyes')}")
+        tasks = [
+            asyncio.to_thread(self.__update_dynamically_services_functions,s_name)
+            for s_name in available_services
+        ]
+        await asyncio.gather(*tasks)
 
         self.save_to_filemap()
         logger.success("Update finished !")
+        print_elapsed_time(start_time=start)
         return
+
+    def __update_dynamically_services_functions(self, service_name: str) -> None:
+        curr_service = Service(name=service_name)
+        try:
+            boto_service: boto3.session.Session = self.boto_session.client(service_name=curr_service.name)
+        except Exception as e:
+            logger.error(f"Impossible to connect to AWS service : {service_name}\n{str(e)}")
+            return
+        for function in dir(boto_service):
+            if not function.startswith("_"):
+                # remove user or role API in IAM according to current entity type
+                #if not (curr_service.name == "iam" and iam_entity_to_remove.value in function):
+                func = getattr(boto_service, function)
+                try:
+                    func_doc = func.__doc__ if hasattr(func, "__doc__") else None
+                    if func_doc is not None:
+                        params = Function.parse_boto_docstring(docstr=str(func_doc))
+                        curr_service.add_function(function=Function(name=function, activated=True, parameters=params))
+                except TypeError:
+                    pass
+        self.services.add_service(service=curr_service)
+
 
     def save_to_filemap(self, output_file: Path = None):
         out_file = output_file if output_file is not None else self.services.FILE_MAP
