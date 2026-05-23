@@ -239,6 +239,7 @@ python3 main.py --unsafe-mode
 - [X] Check if function as "OwnerIds" in params and then replace it with "self" to avoid false positive
 - [X] Detect all params of a function (by parsing __doc__ strings, couldn't find another way to do it)
 - [X] First call functions with no required params and then those with params (and try to replace params with previous collected artefacts)
+- [X] Handling correctly banner
 
 ## TBD : 
 

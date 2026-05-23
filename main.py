@@ -152,7 +152,15 @@ def parse_args() -> argparse.Namespace:
     all_regions = partitions_mngr.list_regions(get_all=True)
     regions_choices = [r.name for r in all_regions] + ["all"]
 
-    parser = argparse.ArgumentParser(description='Bruteforce AWS rights with boto3', epilog=print_banner()) #little hack to print banner on help menu. Do not return str because if so, the rest of help message wont print...
+    pre_parser = argparse.ArgumentParser(add_help=False)
+    pre_parser.add_argument('--no-banner', action="store_true", default=False, help='Do not print banner')
+
+    # Parse only known args first
+    pre_args, remaining = pre_parser.parse_known_args()
+    if not pre_args.no_banner:
+        print_banner()
+
+    parser = argparse.ArgumentParser(description='Bruteforce AWS rights with boto3', parents=[pre_parser]) #little hack to print banner on help menu. Do not return str because if so, the rest of help message wont print...
     parser.add_argument('--credentials-file', default=User_config.default_credentials_file_path,
                         help='AWS credentials file')
     parser.add_argument('--config-file', default=User_config.default_config_file_path, help='AWS config file')
@@ -173,8 +181,6 @@ def parse_args() -> argparse.Namespace:
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
                         metavar='SERVICES')
     parser.add_argument('--metadata', action="store_true", help='Retrieve metadata of all AWS SDK functions calls')
-    #TODO: FIXME
-    #parser.add_argument('--no-banner', action="store_true", default=False, help='Do not print banner')
     parser.add_argument('-p', '--dont-print-services', action="store_true",
                         help='List of all available services')
     parser.add_argument('--list-partitions', action="store_true",
@@ -183,6 +189,7 @@ def parse_args() -> argparse.Namespace:
                         help='Perform potentially destructive functions. Disabled by default.')
     parser.add_argument("-v", "--verbose", action="count", default=0,
                         help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
+    parser.parse_known_args()
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -191,10 +198,6 @@ if __name__ == "__main__":
 
     args = parse_args()
     set_logger(level=args.verbose)
-
-    # TODO: FIXME
-    # if not args.no_banner:
-    #     print_banner()
 
     if args.list_partitions:
         partitions_mngr.pprint_partitions()
