@@ -15,11 +15,11 @@ description = "AWS IAM bruteforcer"
 readme = "README.md"
 keywords = ["AWS", "IAM", "bruteforce"]
 dependencies = [
-    "R2Log",
-    "boto3",
-    "botocore",
-    "numpy",
-    "requests",
+    "R2Log~=1.0.2",
+    "boto3~=1.43.14",
+    "botocore~=1.43.14",
+    "requests~=2.34.2",
+    "aiobotocore~=3.7.0",
 ]
 dynamic = ["version"]
 requires-python = ">= 3.10"

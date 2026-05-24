@@ -3,43 +3,27 @@ import sys
 import argparse
 import time
 
-from typing import List
-
 from R2Log import logger, console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 from rich.emoji import Emoji
 from rich.prompt import Confirm
 
-import threading
-import queue
-import numpy as np
-
 from AWS_profile import AWS_profile
 from libs.Partitions import Partition_Manager
 from libs.User import User_config
-from libs.Services import print_services, Service
+from libs.Services import print_services
 
 from utils import print_banner, print_elapsed_time, set_logger
 
 partitions_mngr = Partition_Manager()
 
-def worker(task_queue, aws_profile: AWS_profile, progress, task_progress_ids) -> None:
-    """Worker thread function to process tasks from the queue."""
-    while True:
-        try:
-            service_list: List[Service] = task_queue.get(timeout=60)  # Wait for a task
-        except queue.Empty:
-            break  # Exit if the queue is empty
-        try:
-            aws_profile.launch_discovery(service_list, progress, task_progress_ids)
-        except Exception as e:
-            for service in service_list:
-                progress.remove_task(task_progress_ids[service.name])
-            # logger.error(f"Task ["+",".join(services)+f"] failed with exception: {e}")
-            logger.error(f"Error occurred : {e}")
-            console.print_exception(show_locals=True)
-        finally:
-            task_queue.task_done()  # Mark the task as done
+async def worker(service, aws_profile: AWS_profile, progress, task_progress_ids) -> None:
+    try:
+        await aws_profile.launch_discovery(service, progress, task_progress_ids)
+    except Exception as e:
+        progress.remove_task(task_progress_ids[service.name])
+        logger.error(f"Error occurred : {e}")
+        console.print_exception(show_locals=True)
 
 def verify_unsafe(unsafe: bool, aws_profile: AWS_profile) -> None:
     if unsafe:
@@ -96,8 +80,7 @@ def parse_args() -> argparse.Namespace:
     parser.parse_known_args()
     return parser.parse_args()
 
-if __name__ == "__main__":
-
+async def main():
     start = time.time()
 
     args = parse_args()
@@ -109,23 +92,26 @@ if __name__ == "__main__":
     if args.regions:
         regions_to_scan = partitions_mngr.verify_region_exists(input_region=args.regions)
 
-        settings_list = [ User_config.load(config_file_path=args.config_file,
-                                           credentials_file_path=args.credentials_file,
-                                           region_name=region)
-                          for region in regions_to_scan ]
+        settings_list = [User_config.load(config_file_path=args.config_file,
+                                          credentials_file_path=args.credentials_file,
+                                          region_name=region)
+                         for region in regions_to_scan]
     else:
-        settings_list = [ User_config.load(config_file_path=args.config_file, credentials_file_path=args.credentials_file) ]
+        settings_list = [
+            User_config.load(config_file_path=args.config_file, credentials_file_path=args.credentials_file)]
 
     for curr_settings in settings_list:
 
         aws_profile = AWS_profile(creds=curr_settings, metadata=args.metadata)
+        await aws_profile.init_class()
 
         if args.update_services:
-            asyncio.run(aws_profile.update_dynamically_services())
-            start = time.time() #reset start time as above took a while
+            await aws_profile.update_dynamically_services()
+            start = time.time()  # reset start time as above took a while
 
+        iam_res = {}
         if not args.skip_iam:
-            iam_res = aws_profile.iam_enum()
+            iam_res = await aws_profile.iam_enum()
 
         verify_unsafe(unsafe=args.unsafe_mode, aws_profile=aws_profile)
         aws_profile.services.calculate_white_and_black_list(white_list=args.white_list, black_list=args.black_list)
@@ -144,14 +130,6 @@ if __name__ == "__main__":
         logger.info(f"Be patient, script can take up to 6min to BF. {Emoji('pray')}")
 
         services_to_bf = aws_profile.services.get_services(active_only=True)
-        NUMBER_OF_THREADS = len(services_to_bf) if len(services_to_bf) < args.threads else args.threads
-
-        services_chunks = np.array_split(services_to_bf, NUMBER_OF_THREADS)
-        services_chunks = [list(chunk) for chunk in services_chunks]
-
-        task_queue = queue.Queue()
-        for chunk in services_chunks:
-            task_queue.put(chunk)
 
         with Progress(
                 SpinnerColumn(),
@@ -167,23 +145,21 @@ if __name__ == "__main__":
             # Add tasks to the progress bar
             task_progress_ids = {
                 service.name: progress.add_task(f"[green]Processing {service.name}...", total=len(service.get_functions()))
-                for service in aws_profile.services.get_services(active_only=True)
+                for service in services_to_bf
             }
-
-            # Start worker threads
-            threads = []
-            for _ in range(NUMBER_OF_THREADS):  # Adjust the number of threads as needed
-                thread = threading.Thread(target=worker, args=(task_queue, aws_profile, progress, task_progress_ids))
-                thread.start()
-                threads.append(thread)
-
-            # Wait for all threads to finish
-            for thread in threads:
-                thread.join(timeout=args.thread_timeout)
+            workers = [
+                asyncio.create_task(worker(service, aws_profile, progress, task_progress_ids))
+                for service in services_to_bf
+            ]
+            await asyncio.gather(*workers)
 
         if not args.skip_iam:
             aws_profile.write_iam_results_at_the_end(iam_results=iam_res)
 
-        logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.boto_session.region_name}")
+        logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.get_region()}")
         print_elapsed_time(start_time=start)
         logger.info(f"Please wait for threads to exit properly (even if Ctrl+C should not cause damages to results) {Emoji('hamster')}")
+
+if __name__ == "__main__":
+
+    asyncio.run(main())

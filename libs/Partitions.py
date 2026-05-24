@@ -108,9 +108,6 @@ class Partition_Manager:
         array_intersect = list(set(input_region) & set(all_regions_str))
         if not array_intersect:
             # raise ValueError("No valid regions found")
-            logger.critical(
-                f"Region '{input_region}' is not valid for partition {self.partition}"
-                f"Allowed values: {" ".join(all_regions_str)}"
-            )
+            logger.critical(f"Region '{input_region}' is not valid.\nAllowed values: {" ".join(all_regions_str)}")
         return array_intersect
 

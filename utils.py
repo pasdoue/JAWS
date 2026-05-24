@@ -53,3 +53,43 @@ def print_elapsed_time(start_time) -> None:
     end = time.time()
     logger.info(f"Script took : {str(end - start_time)} seconds")
 
+
+def get_unique_keys(obj, result=None):
+    """
+        Allow to retrieve all "keys" recursively in a JSON.
+        Usefull for guessing parameters that are required
+    """
+    if result is None:
+        result = set()
+
+    if isinstance(obj, dict):
+        for k, v in obj.items():
+            result.add(k)
+            get_unique_keys(v, result)
+
+    elif isinstance(obj, list):
+        for item in obj:
+            get_unique_keys(item, result)
+
+    return result
+
+def find_parent(obj, target_key, parent=None):
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+
+            # clé trouvée -> retourner le parent
+            if key == target_key:
+                return parent
+
+            # continuer récursivement
+            result = find_parent(value, target_key, obj)
+            if result is not None:
+                return result
+
+    elif isinstance(obj, list):
+        for item in obj:
+            result = find_parent(item, target_key, parent)
+            if result is not None:
+                return result
+
+    return None

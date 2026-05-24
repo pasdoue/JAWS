@@ -19,44 +19,40 @@ class User_config:
     default_config_file_path: Path = Path.home() / ".aws" / "config"
 
     @classmethod
-    def _load_credentials_file(cls,
-                               credentials_file_path: Path = default_credentials_file_path,
-                               region_name: Optional[str] = None) -> dict:
+    def _load_credentials_file(cls, credentials_file_path: Path, region_name: Optional[str]) -> dict:
+        profile_to_use = ""
         res = {}
         credentials = ConfigParser()
 
         if credentials_file_path.exists():
             credentials.read(credentials_file_path)
-            cred_section = ""
-            if len(credentials.sections()) > 1:
+            cred_sections = credentials.sections()
+            if len(cred_sections) > 1:
                 prompt = f"Choose credentials to use : " if region_name is None else f"Choose credentials to use for region ({region_name}) : "
-                cred_section = Prompt.ask(prompt=prompt, choices=credentials.sections(), show_choices=True)
-            elif len(credentials.sections()) == 1:
-                cred_section = credentials.sections()[0]
+                profile_to_use = Prompt.ask(prompt=prompt, choices=cred_sections, show_choices=True)
+            elif len(cred_sections) == 1:
+                profile_to_use = cred_sections[0]
+                logger.info(f"Chose default creds in {credentials_file_path} which is : \[{cred_sections[0]}]")
             else:
-                raise ValueError(f"{Emoji('hamster')} AWS credentials file detected but no section found.")
+                raise ValueError(f"{Emoji('hamster')} AWS credentials file detected but no section found : {credentials_file_path}")
 
-            if cred_section:
-                tmp = dict(credentials.items(cred_section))
-                res["profile_name"] = cred_section
+            tmp = dict(credentials.items(profile_to_use))
+            for k, v in tmp.items():
+                logger.info(f"{k} : {v[:4]}...{v[-4:]}")
 
-                # Because AWS Boto library Session only accept those params and no other ones... We need to remove all other params... GG AWS
-                for k, v in tmp.items():
-                    # verify this param exists in boto3.session.Session
-                    if k in inspect.signature(boto3.session.Session).parameters.keys():
-                        res[k] = v
+            res["profile_name"] = profile_to_use
+            # Because AWS Boto library Session only accept those params and no other ones... We need to remove all other params... GG AWS
+            for k, v in tmp.items():
+                # verify this param exists in boto3.session.Session
+                if k in inspect.signature(boto3.session.Session).parameters.keys():
+                    res[k] = v
         else:
-            raise FileNotFoundError(f"{Emoji('no_entry_sign')} AWS credentials file does not exists. Configure it to launch script")
+            raise FileNotFoundError(f"{Emoji('no_entry_sign')} AWS credentials file does not exists : {credentials_file_path}")
         return res
 
     @classmethod
-    def _load_config_file(cls,
-                          config_file_path: Path = default_config_file_path,
-                          region_name: Optional[str] = None) -> dict:
+    def _load_config_file(cls, config_file_path: Path) -> dict:
         config = ConfigParser()
-
-        if region_name is not None:
-            return {"region_name": region_name}
 
         if config_file_path.exists():
             config.read(config_file_path)
@@ -65,13 +61,14 @@ class User_config:
                 config_section = Prompt.ask(prompt="Choose config to use : ", choices=config.sections(), show_choices=True)
             elif len(config.sections()) == 1:
                 config_section = config.sections()[0]
+                logger.info(f"Chose default region in {config_file_path} which is : {config.get(config_section, "region")}")
             else:
-                raise ValueError(f"{Emoji('hamster')} AWS config file detected but no section found.")
+                raise ValueError(f"{Emoji('hamster')} AWS config file detected but no section found : {config_file_path}")
 
             # Because AWS Boto library Session only accept those params and no other ones... We need to remove all other params... GG AWS
             return {"region_name": config.get(config_section, "region")}
         else:
-            raise FileNotFoundError(f"{Emoji('no_entry_sign')} AWS config file does not exist. Using environment variables. Configure it to launch script")
+            raise FileNotFoundError(f"{Emoji('no_entry_sign')} AWS config file does not exist : {config_file_path}")
 
     @staticmethod
     def load(credentials_file_path: Union[Path|str] = default_credentials_file_path,
