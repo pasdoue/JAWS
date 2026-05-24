@@ -14,14 +14,10 @@ Tested projects :
 It's possible that you encounter issues even if I try to test as much as possible all possible configurations...  
 Feel free to report an issue or suggest a PR 🍻
 
-This code is using official **boto3** library and load **dynamically** all services (ie : iam,ec2...) and all associated functions (ie : ec2.list_images_in_recycle_bin and so on) of boto3  
+This code is using official **boto3** library and load **dynamically** all services (ie : iam,ec2...) and all associated functions (ie : ec2.list_images_in_recycle_bin and so on) of aiobotocore  
 **So even if boto3 is updated, this tool remains up to date !! 😉**  
 
-### When first launch it may takes around 4min30 because needs to map all boto functions !!   
-### After that it runs up to **7min for total BF** with fiber connection (**still twice faster than other tools 🏎😉**)
-
-At the end, when you see this message : "Please wait for threads to exit properly..." you can kill prog if you want (just verify output folder is well populated).  
-Something get stuck while finishing and I couldn't identify why or what is the real bottleneck... 
+### Takes up to **5min for total BF** with fiber connection (**still twice faster than other tools 🏎😉**)
 
 ## Setup
 
@@ -118,9 +114,9 @@ In summary : partition > regions > services > functions
 The well known "regions" that everybody knows is part of a partition called "aws"  
 All those information can be seen inside : .venv/lib/python3.14/site-packages/botocore/data/endpoints.json  
 
-1. To stay up to date according to declared "partitions" and "regions" of SDK, the script read those information from "endpoints.json" (complete path just upper). 
+1. To stay up to date according to declared "partitions" and "regions" in SDK of boto3, the script read those information from "endpoints.json" (complete path just upper). 
 
-2. Script begin always by loading all services and functions available in SDK. So it is always up to date (take about 4min30).
+2. Script begin always by loading all services and functions available in SDK of aiobotocore. So it is always up to date (take about 10sec).
 
 3. Perform equivalent of `aws sts get_caller_identity` to retrieve ARN (identity of the token)
 Examples : 
@@ -244,14 +240,15 @@ python3 main.py --unsafe-mode
 - [X] Remove metadata from SDK response (better clarity & less storage used)
 - [X] Put first IAM checks & results after BF performed (also check why those calls are performed as they should be deactivated for BF phase)
 - [X] Check if function as "OwnerIds" in params and then replace it with "self" to avoid false positive
-- [X] Detect all params of a function (by parsing __doc__ strings, couldn't find another way to do it)
-- [X] First call functions with no required params and then those with params (and try to replace params with previous collected artefacts)
+- [X] First call functions with no required params and then those with params (and try to replace params with previous collected artifacts)
 - [X] Handling correctly banner
+- [X] Using fully asyncio now to speed up recon of SDK (4min30 to 10sec). Also total BF is speed up a little (~4min30 instead of 5 to 7min)
 
 ## TBD : 
 
 - [ ] Some parameters of some particular functions are not well retrieved (WTF ><) : lucifer elasticbeanstalk describe_environment_managed_action_history 
 - [ ] Handle multiple args replacement
+- [ ] Try to detect args of functions that are optional (but at least one arg should be passed to run properly). Sounds tricky 
 - [ ] Detect if some results will be erased and trigger a warning if different from previous run
 - [ ] Maybe chunk output json files that are too big (but make it optional)
 

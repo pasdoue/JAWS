@@ -158,7 +158,6 @@ async def main():
 
         logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.get_region()}")
         print_elapsed_time(start_time=start)
-        logger.info(f"Please wait for threads to exit properly (even if Ctrl+C should not cause damages to results) {Emoji('hamster')}")
 
 if __name__ == "__main__":
 
