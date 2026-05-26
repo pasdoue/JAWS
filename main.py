@@ -13,7 +13,7 @@ from libs.Partitions import Partition_Manager
 from libs.User import User_config
 from libs.Services import print_services
 
-from utils import print_banner, print_elapsed_time, set_logger
+from utils import print_banner, print_elapsed_time, set_logger, SharkBarColumn
 
 partitions_mngr = Partition_Manager()
 
@@ -54,8 +54,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--config-file', default=User_config.default_config_file_path, help='AWS config file')
     parser.add_argument('-t', '--threads', type=int, default=75, help='Number of threads to use')
     parser.add_argument('--thread-timeout', type=int, default=30, help='Timeout consumed before killing thread')
-    parser.add_argument('--update-services', action="store_true", default=False,
-                        help='Force to update list of services and associated functions. This file saves time to avoid reparsing all services/functions/functions_args...')
     parser.add_argument('-r', '--regions',
                         nargs='*',
                         choices=regions_choices,
@@ -69,12 +67,13 @@ def parse_args() -> argparse.Namespace:
                         help='List of services to whitelist/scan separated by comma. Launch script with -p to see services',
                         metavar='SERVICES')
     parser.add_argument('--metadata', action="store_true", help='Retrieve metadata of all AWS SDK functions calls')
-    parser.add_argument('-p', '--dont-print-services', action="store_true", help='List of all available services')
+    parser.add_argument('-p', '--dont-print-services', action="store_true", help='Don\'t print stats of number of calls it will perform and execute discovery asap (without prompt)')
     parser.add_argument('-s', '--skip-iam', action="store_true", help='Don\'t perform IAM check')
     parser.add_argument('--list-partitions', action="store_true",
-                        help='Partition to use (upper level of regions - which is not documented but found by reversing SDK)')
+                        help='List partitions (upper level of regions - found by reversing SDK)')
     parser.add_argument('--unsafe-mode', action="store_true",
                         help='Perform potentially destructive functions. Disabled by default.')
+    parser.add_argument('--no-fancy-bar', action="store_true", help='Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)')
     parser.add_argument("-v", "--verbose", action="count", default=0,
                         help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
     parser.parse_known_args()
@@ -105,10 +104,6 @@ async def main():
         aws_profile = AWS_profile(creds=curr_settings, metadata=args.metadata)
         await aws_profile.init_class()
 
-        if args.update_services:
-            await aws_profile.update_dynamically_services()
-            start = time.time()  # reset start time as above took a while
-
         iam_res = {}
         if not args.skip_iam:
             iam_res = await aws_profile.iam_enum()
@@ -131,10 +126,11 @@ async def main():
 
         services_to_bf = aws_profile.services.get_services(active_only=True)
 
+        bar_column = BarColumn() if args.no_fancy_bar else SharkBarColumn()
         with Progress(
                 SpinnerColumn(),
                 "[bold blue]{task.description}",
-                BarColumn(),
+                bar_column,
                 "[progress.percentage]{task.percentage:>3.0f}%",
                 "•",
                 TextColumn("[cyan]{task.completed}/{task.total}"),

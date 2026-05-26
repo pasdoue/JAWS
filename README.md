@@ -68,9 +68,9 @@ python3 -m pip install -e .
 ⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
-usage: main.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT] [--update-services]
+usage: main.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT]
                [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]
-               [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [-v]
+               [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [--no-fancy-bar] [-v]
 
 Bruteforce AWS rights with boto3
 
@@ -85,7 +85,6 @@ options:
                         Number of threads to use
   --thread-timeout THREAD_TIMEOUT
                         Timeout consumed before killing thread
-  --update-services     Force to update list of services and associated functions. This file saves time to avoid reparsing all services/functions/functions_args...
   -r, --regions [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]
                         Specify regions to scan
   -b, --black-list [SERVICES ...]
@@ -94,12 +93,15 @@ options:
                         List of services to whitelist/scan separated by comma. Launch script with -p to see services
   --metadata            Retrieve metadata of all AWS SDK functions calls
   -p, --dont-print-services
-                        List of all available services
+                        Don't print stats of number of calls it will perform and execute discovery asap (without prompt)
   -s, --skip-iam        Don't perform IAM check
-  --list-partitions     Partition to use (upper level of regions - which is not documented but found by reversing SDK)
+  --list-partitions     List partitions (upper level of regions - found by reversing SDK)
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
+  --no-fancy-bar        Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
 ```
+
+![Demo](assets/JAWS_final.gif)
 
 ## How does it works ? 
 
@@ -243,6 +245,7 @@ python3 main.py --unsafe-mode
 - [X] First call functions with no required params and then those with params (and try to replace params with previous collected artifacts)
 - [X] Handling correctly banner
 - [X] Using fully asyncio now to speed up recon of SDK (4min30 to 10sec). Also total BF is speed up a little (~4min30 instead of 5 to 7min)
+- [X] Adding fancy advancement bar (run for your life before sharky got you!! 🦈) 
 
 ## TBD : 
 

@@ -3,6 +3,10 @@ import random
 import time
 
 from R2Log import logger
+from rich.emoji import Emoji
+from rich.progress import ProgressColumn
+from rich.text import Text
+
 
 def print_banner() -> None:
     banners = []
@@ -93,3 +97,28 @@ def find_parent(obj, target_key, parent=None):
                 return result
 
     return None
+
+
+class SharkBarColumn(ProgressColumn):
+    def __init__(self, width=30):
+        super().__init__()
+        self.width = width
+
+    def render(self, task):
+        total = task.total or 1
+        # swimmer position
+        swimmer_pos = int((task.completed / total) * (self.width - 1))
+        # shark stays one step behind
+        #shark_pos = max(0, swimmer_pos - 1)
+        shark_pos = int(swimmer_pos * 0.8)
+        bar = []
+
+        for i in range(self.width):
+            if i == swimmer_pos:
+                bar.append(Emoji.replace(':rowboat:'))
+            elif i == shark_pos and swimmer_pos > 0:
+                bar.append(Emoji.replace(':shark:'))
+            else:
+                bar.append(Emoji.replace(':water_wave:'))
+        return Text(" ".join(bar))
+
