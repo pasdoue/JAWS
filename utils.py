@@ -118,7 +118,9 @@ class SharkBarColumn(ProgressColumn):
                 bar.append(Emoji.replace(':rowboat:'))
             elif i == shark_pos and swimmer_pos > 0:
                 bar.append(Emoji.replace(':shark:'))
-            else:
+            elif i < swimmer_pos:
                 bar.append(Emoji.replace(':water_wave:'))
+            else:
+                bar.append("　")
         return Text(" ".join(bar))
 

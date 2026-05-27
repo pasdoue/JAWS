@@ -101,7 +101,7 @@ options:
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
 ```
 
-![Demo](assets/JAWS_final.gif)
+![Demo](assets/JAWS_run.gif)
 
 ## How does it works ? 
 
