@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# PYTHON_ARGCOMPLETE_OK
+from jawsome.main import main
+
+if __name__ == '__main__':
+    exit(main())

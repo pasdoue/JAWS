@@ -46,10 +46,10 @@ class Partition_Manager:
         self._construct_partitions()
 
     def _construct_partitions(self) -> None:
-        for partition in self.data["partitions"]:
+        for partition in self.data.get("partitions", []):
             regions = []
-            for name, descr in partition["regions"].items():
-                regions.append(Region(name=name, description=descr["description"]))
+            for name, descr in partition.get("regions", {}).items():
+                regions.append(Region(name=name, description=descr.get("description")))
             self.partitions.append(Partition(shortname=partition["partition"],
                       name=partition["partitionName"],
                       dns_suffix=partition["dnsSuffix"],
@@ -70,13 +70,13 @@ class Partition_Manager:
         logger.success(f"There are {len(self.partitions)} partitions")
 
 
-    def list_regions(self, partition_shortname: Optional[str] = None, get_all: bool = False) -> List[Region]:
+    def list_regions(self, partition_shortname: Optional[str] = "", get_all: bool = False) -> List[Region]:
         res = []
         if get_all:
             for p in self.partitions:
                 res += p.regions
             return res
-        elif partition_shortname is not None:
+        elif partition_shortname:
             for p in self.partitions:
                 if p.shortname == partition_shortname:
                     return p.regions

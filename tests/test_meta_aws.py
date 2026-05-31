@@ -1,6 +1,6 @@
 import unittest
 
-from meta_aws.meta_aws import MetaAWS
+from jawsome.meta_aws.meta_aws import MetaAWS
 
 class TestConfig(unittest.TestCase):
 

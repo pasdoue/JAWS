@@ -2,18 +2,37 @@ import asyncio
 import sys
 import argparse
 import time
+from pathlib import Path
 
-from R2Log import logger, console
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
-from rich.emoji import Emoji
-from rich.prompt import Confirm
+try:
+    import aiobotocore
+    import botocore
+    import boto3
+    import requests
 
-from AWS_profile import AWS_profile
-from libs.Partitions import Partition_Manager
-from libs.User import User_config
-from libs.Services import print_services
+    from R2Log import logger, console
+    from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
+    from rich.emoji import Emoji
+    from rich.prompt import Confirm
 
-from utils import print_banner, print_elapsed_time, set_logger, SharkBarColumn
+    from jawsome.AWS_profile import AWS_profile
+    from jawsome.libs.Partitions import Partition_Manager
+    from jawsome.libs.User import User_config
+    from jawsome.libs.Services import print_services
+
+    from jawsome.utils import print_banner, print_elapsed_time, set_logger, SharkBarColumn
+    from jawsome.config.ToolConfig import __version__
+
+except ModuleNotFoundError as e:
+    print("Mandatory dependencies are missing:", e)
+    print("Please install them with python3 -m pip install --upgrade -r requirements.txt")
+    exit(1)
+except ImportError as e:
+    print("An error occurred while loading the dependencies!\nDetails:")
+    print(e)
+    exit(1)
+except KeyboardInterrupt:
+    exit(1)
 
 partitions_mngr = Partition_Manager()
 
@@ -49,9 +68,10 @@ def parse_args() -> argparse.Namespace:
         print_banner()
 
     parser = argparse.ArgumentParser(description='Bruteforce AWS rights with boto3', parents=[pre_parser]) #little hack to print banner on help menu. Do not return str because if so, the rest of help message wont print...
-    parser.add_argument('--credentials-file', default=User_config.default_credentials_file_path,
-                        help='AWS credentials file')
+    parser.add_argument('--credentials-file', default=User_config.default_credentials_file_path, help='AWS credentials file')
     parser.add_argument('--config-file', default=User_config.default_config_file_path, help='AWS config file')
+    parser.add_argument('--log-file', action="store_true", help='Log inside file the current run')
+    parser.add_argument('-o','--output-dir', default=Path.cwd(), help='Custom output directory to store results')
     parser.add_argument('-t', '--threads', type=int, default=75, help='Number of threads to use')
     parser.add_argument('--thread-timeout', type=int, default=30, help='Timeout consumed before killing thread')
     parser.add_argument('-r', '--regions',
@@ -69,21 +89,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--metadata', action="store_true", help='Retrieve metadata of all AWS SDK functions calls')
     parser.add_argument('-p', '--dont-print-services', action="store_true", help='Don\'t print stats of number of calls it will perform and execute discovery asap (without prompt)')
     parser.add_argument('-s', '--skip-iam', action="store_true", help='Don\'t perform IAM check')
-    parser.add_argument('--list-partitions', action="store_true",
-                        help='List partitions (upper level of regions - found by reversing SDK)')
-    parser.add_argument('--unsafe-mode', action="store_true",
-                        help='Perform potentially destructive functions. Disabled by default.')
+    parser.add_argument('--list-partitions', action="store_true", help='List partitions (upper level of regions - found by reversing SDK)')
+    parser.add_argument('--unsafe-mode', action="store_true", help='Perform potentially destructive functions. Disabled by default.')
     parser.add_argument('--no-fancy-bar', action="store_true", help='Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)')
-    parser.add_argument("-v", "--verbose", action="count", default=0,
-                        help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
+    parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
+    parser.add_argument("--version", action="store_true", help="Print tool version")
     parser.parse_known_args()
     return parser.parse_args()
 
-async def main():
+async def entry_point():
     start = time.time()
 
     args = parse_args()
-    set_logger(level=args.verbose)
+    set_logger(level=args.verbose, logfile=args.log_file)
+
+    if args.version:
+        logger.info(f"Version : {__version__}")
+        exit(0)
 
     if args.list_partitions:
         partitions_mngr.pprint_partitions()
@@ -101,7 +123,7 @@ async def main():
 
     for curr_settings in settings_list:
 
-        aws_profile = AWS_profile(creds=curr_settings, metadata=args.metadata)
+        aws_profile = AWS_profile(creds=curr_settings, metadata=args.metadata, output_dir=args.output_dir)
         await aws_profile.init_class()
 
         iam_res = {}
@@ -155,6 +177,15 @@ async def main():
         logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.get_region()}")
         print_elapsed_time(start_time=start)
 
-if __name__ == "__main__":
-
-    asyncio.run(main())
+def main():
+    try:
+        return asyncio.run(entry_point())
+    except (KeyboardInterrupt, asyncio.CancelledError, EOFError):
+        return 2
+    except SystemExit as e:
+        if e.code is not None:
+            return int(e.code)
+    except Exception:
+        logger.error("It seems that something unexpected happened ...")
+        console.print_exception(show_locals=True, suppress=[asyncio, botocore, boto3, requests, aiobotocore])
+    return 1

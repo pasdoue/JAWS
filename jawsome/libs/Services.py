@@ -1,11 +1,11 @@
-import re
+from re import search as regex_search
 from itertools import zip_longest
 from typing import List, Optional
 
 from R2Log import logger, console
 from rich.emoji import Emoji
 
-from settings import Config
+from jawsome.config.ToolConfig import Tool_Config
 
 
 class Parameter:
@@ -39,18 +39,6 @@ class Function:
             else:
                 return [p.name for p in self.parameters]
 
-    @staticmethod
-    def parse_boto_docstring(docstr: str) -> List[Parameter]:
-        params = []
-        for line in docstr.splitlines():
-            if line.startswith(":param"):
-                param_name = line.split(":")[1].split()[1]
-                is_required = False if not "[REQUIRED]" in line else True
-                params.append(Parameter(name=param_name, required=is_required))
-            elif line.startswith(":rtype:"):
-                break
-        return params if params else []
-
     def has_no_required_params(self) -> bool:
         if not self.parameters:
             return True
@@ -79,7 +67,7 @@ class Service:
     def add_function(self, function: Function):
         self.functions.append(function)
 
-    def update_stats(self) -> None:
+    def update_functions_stats(self) -> None:
         self.nb_functions = len(self.functions)
         self.nb_activated_functions = 0
         for f in self.functions:
@@ -126,8 +114,6 @@ class Service:
         return funcs
 
 class Services:
-
-    FILE_MAP = Config.SERVICES_FILE_MAPPING
 
     def __init__(self, safe_mode: bool = True) -> None:
         self.safe_mode = safe_mode # by default is True to avoid wrong behaviors
@@ -183,7 +169,7 @@ class Services:
                                 self.nb_activated_services -= 1
 
                     elif search_type == "regex":
-                        if re.search(pattern, function.name):
+                        if regex_search(pattern, function.name):
                             function.activated = False
                             self.nb_activated_services -= 1
 
@@ -220,11 +206,11 @@ class Services:
         for service in self.services:
             if service.activated:
                 for function in service.functions:
-                    if any(function.name.startswith(safe_mode) for safe_mode in Config.SAFE_MODE):
+                    if any(function.name.startswith(safe_mode) for safe_mode in Tool_Config.SAFE_MODE):
                        function.activated = True
                     else:
                         function.activated = False
-            service.update_stats()
+            service.update_functions_stats()
 
 
 def print_services(services: Services) -> None:

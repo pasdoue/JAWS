@@ -32,7 +32,7 @@ class User_config:
                 profile_to_use = Prompt.ask(prompt=prompt, choices=cred_sections, show_choices=True)
             elif len(cred_sections) == 1:
                 profile_to_use = cred_sections[0]
-                logger.info(f"Chose default creds in {credentials_file_path} which is : \[{cred_sections[0]}]")
+                logger.info(f"Chose default creds in {credentials_file_path} which is : [{cred_sections[0]}]")
             else:
                 raise ValueError(f"{Emoji('hamster')} AWS credentials file detected but no section found : {credentials_file_path}")
 

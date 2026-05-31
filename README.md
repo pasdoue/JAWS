@@ -19,6 +19,30 @@ This code is using official **boto3** library and load **dynamically** all servi
 
 ### Takes up to **5min for total BF** with fiber connection (**still twice faster than other tools 🏎😉**)
 
+## Installation
+
+### Pypi
+
+As JAWS already exists on Pypi I had to rename the project to jawsome
+
+```bash
+pip install jawsome
+```
+
+### Local build
+
+```bash
+python -m build && pip install dist/jawsome*.whl
+```
+Then just call : ```jawsome -h```
+
+### Local run
+
+```bash
+git clone https://github.com/pasdoue/JAWS.git
+python jawsome.py -h
+```
+
 ## Setup
 
 1. Set your creds & config inside files : https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html
@@ -50,17 +74,17 @@ python3 -m pip install -e .
 
 3. Start gathering info
 
-> python3 -h
+> python3 jawsome.py -h
 
 ```bash
 [*]
 ⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣀⣀⣠⣤⣤⠶⠶⠶⠶⠾⠛⠛⠛⠛⠛⠛⠛⢿
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣶⣿⣛⠛⠛⠛⠓⠢⢄⡀⠀⠤⠟⠂⠀⠀⠀⠀⠀⠀⢀⡿        ██╗ █████╗ ██╗    ██╗███████╗
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⠾⠛⠉⠑⠤⣙⢮⡉⠓⣦⣄⡀⠀⣹⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⠃        ██║██╔══██╗██║    ██║██╔════╝
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣤⡶⠞⠋⠉⠀⠀⠀⠀⠀⠀⠒⠛⠛⠛⠉⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⢰⡟⠀        ██║███████║██║ █╗ ██║███████╗
-⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡴⠾⠛⠉⣡⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⢺⢿⢉⡽⡟⢓⣶⠦⢤⣀⡀⠈⠳⣿⠁⠀        ██║██╔══██║██║███╗██║╚════██║
-⠀⠀⠀⠀⠀⠀⠀⠀⣀⡴⠟⠁⠀⠀⣀⣴⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡤⠚⠁⠀⢛⠛⠛⠻⢷⡧⣾⡴⣛⣏⣹⡇⣀⣿⠀⠀    █████╔╝██║  ██║╚███╔███╔╝███████║
-⠀⠀⠀⠀⠀⠀⣠⠞⠋⠀⣀⠤⠒⢉⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⠔⠋⠀⣀⠴⠚⠛⠛⠯⡑⠂⠀⠀⡏⢹⣿⡾⠟⠋⠁⠀⠀    ╚════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚══════╝
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣀⣤⣶⣿⣛⠛⠛⠛⠓⠢⢄⡀⠀⠤⠟⠂⠀⠀⠀⠀⠀⠀⢀⡿         ██╗ █████╗ ██╗    ██╗███████╗ ██████╗ ███╗   ███╗███████╗
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⠾⠛⠉⠑⠤⣙⢮⡉⠓⣦⣄⡀⠀⣹⠆⠀⠀⠀⠀⠀⠀⠀⠀⠀⣸⠃         ██║██╔══██╗██║    ██║██╔════╝██╔═══██╗████╗ ████║██╔════╝
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣠⣤⣤⡶⠞⠋⠉⠀⠀⠀⠀⠀⠀⠒⠛⠛⠛⠉⠉⠉⠉⠀⠀⠀⠀⠀⠀⠀⢀⡀⠀⢰⡟⠀         ██║███████║██║ █╗ ██║███████╗██║   ██║██╔████╔██║█████╗
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⡴⠾⠛⠉⣡⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⣴⢺⢿⢉⡽⡟⢓⣶⠦⢤⣀⡀⠈⠳⣿⠁⠀    ██   ██║██╔══██║██║███╗██║╚════██║██║   ██║██║╚██╔╝██║██╔══╝
+⠀⠀⠀⠀⠀⠀⠀⠀⣀⡴⠟⠁⠀⠀⣀⣴⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⡤⠚⠁⠀⢛⠛⠛⠻⢷⡧⣾⡴⣛⣏⣹⡇⣀⣿⠀⠀    ╚█████╔╝██║  ██║╚███╔███╔╝███████║╚██████╔╝██║ ╚═╝ ██║███████╗
+⠀⠀⠀⠀⠀⠀⣠⠞⠋⠀⣀⠤⠒⢉⡿⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣀⠔⠋⠀⣀⠴⠚⠛⠛⠯⡑⠂⠀⠀⡏⢹⣿⡾⠟⠋⠁⠀⠀     ╚════╝ ╚═╝  ╚═╝ ╚══╝╚══╝ ╚══════╝ ╚═════╝ ╚═╝     ╚═╝╚══════╝
 ⠀⠀⠀⠀⣠⠞⠁⠀⠐⠊⠀⠀⢠⡿⠁⠀⢰⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⡏⣤⡿⠋⠀⠀⠀⠀⠀⠀⡹⠀⠀⠀⣠⡾⠋⠀⠀⠀⠀⠀⠀
 ⠀⠀⣠⡞⠁⠀⠀⠀⠀⠀⠀⢠⡿⠁⢀⢸⠀⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀⣷⡞⠋⠉⠉⠓⠒⠢⢤⣴⣥⣆⣠⡾⠋⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀Made by pasdoue
 ⠀⣼⠋⠀⠀⠀⠀⠀⠀⠀⢀⡟⠀⠀⢸⠀⡆⢧⠀⠀⠀⠀⠀⠀⠀⠀⠀⢻⢽⣦⠀⠀⠀⠀⠀⠀⣟⡿⣽⡏⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
@@ -68,9 +92,9 @@ python3 -m pip install -e .
 ⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
-usage: main.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [-t THREADS] [--thread-timeout THREAD_TIMEOUT]
-               [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]
-               [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [--no-fancy-bar] [-v]
+usage: jawsome.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [--log-file] [-o OUTPUT_DIR] [-t THREADS] [--thread-timeout THREAD_TIMEOUT]
+                  [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]                                                              
+                  [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [--no-fancy-bar] [-v] [--version]
 
 Bruteforce AWS rights with boto3
 
@@ -81,11 +105,14 @@ options:
                         AWS credentials file
   --config-file CONFIG_FILE
                         AWS config file
+  --log-file            Log inside file the current run
+  -o, --output-dir OUTPUT_DIR
+                        Custom output directory to store results
   -t, --threads THREADS
                         Number of threads to use
   --thread-timeout THREAD_TIMEOUT
                         Timeout consumed before killing thread
-  -r, --regions [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]
+  -r, --regions [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]                                                                     
                         Specify regions to scan
   -b, --black-list [SERVICES ...]
                         List of services to remove separated by comma. Launch script with -p to see services
@@ -99,6 +126,7 @@ options:
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
   --no-fancy-bar        Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
+  --version             Print tool version
 ```
 
 ![Demo](assets/JAWS_run.gif)
@@ -159,78 +187,67 @@ Path is indicated on terminal/logs at the end of scan, you may have to scroll up
 
 Launch scan on all services : 
 ```bash
-python3 main.py
+python3 jawsome.py
 ```
 
 Launch scan on all services and retrieve metadata (deactivated by default) : 
 ```bash
-python3 main.py --metadata
+python3 jawsome.py --metadata
 ```
 
 Force an update of all boto3 services/functions/functions_params mapping (can be slow) : 
 ```bash
-python3 main.py --update-services
+python3 jawsome.py --update-services
 ```
 
 List partitions : 
 ```bash
-python3 main.py --list-partitions
+python3 jawsome.py --list-partitions
 ```
 
-Spawn script without banner (bye bye sharky :/) : 
+Spawn script without banner (bye bye sharky 😢) : 
 ```bash
-python3 main.py --no-banner
+python3 jawsome.py --no-banner
 ```
 
 Do not perform "intelligent IAM check" (can be useful when only want to print services stats) : 
 ```bash
-python3 main.py --skip-iam
+python3 jawsome.py --skip-iam
 ```
 
-Dont print list of available services : 
+Do not print list of available services : 
 ```bash
-python3 main.py -p
+python3 jawsome.py -p
 ```
 
 Scan using services white-list : 
 ```bash
-python3 main.py -w ec2 sts pricing dynamodb
-```
-
-Show number of calls that will be performed using only some services : 
-Asks you if you want to perform scan now ;)
-```bash
-python3 main.py -p -w ec2 sts dynamodb
+python3 jawsome.py -w ec2 sts pricing dynamodb
 ```
 
 Scan using black-list : 
 ```bash
-python3 main.py -b cloudhsm cloudhsmv2 sms dynamodb
+python3 jawsome.py -b cloudhsm cloudhsmv2 sms dynamodb
 ```
 
 Scan using black-list & white-list (will perform scan on white list without "dynamodb" service): 
 ```bash
-python3 main.py -w ec2 sts pricing dynamodb -b cloudhsm cloudhsmv2 sms dynamodb
-```
-
-Update region file list :  
-```bash
-python3 main.py --update-regions
+python3 jawsome.py -w ec2 sts pricing dynamodb -b cloudhsm cloudhsmv2 sms dynamodb
 ```
 
 Perform scan on multiple regions :  
 ```bash
-python3 main.py -w ec2 sts -r us-east-1 us-east-2 eu-west-1
+python3 jawsome.py -w ec2 sts -r us-east-1 us-east-2 eu-west-1
 ```
 
 Perform scan on ALL regions (carefull should take a looong time friendo) :  
 ```bash
-python3 main.py -w ec2 sts -r all
+python3 jawsome.py -w ec2 sts -r all
 ```
 
 Total BF (unsafe mode, not recommended if you don't know what you do)
 ```bash
-python3 main.py --unsafe-mode
+python3 jawsome.py --unsafe-mode
 ```
 
 ## Done : 
@@ -246,6 +263,7 @@ python3 main.py --unsafe-mode
 - [X] Handling correctly banner
 - [X] Using fully asyncio now to speed up recon of SDK (4min30 to 10sec). Also total BF is speed up a little (~4min30 instead of 5 to 7min)
 - [X] Adding fancy advancement bar (run for your life before sharky got you!! 🦈) 
+- [X] Modify project structure to push to Pypi
 
 ## TBD : 
 

@@ -1,33 +1,52 @@
 [build-system]
-requires = ["setuptools", "wheel", "attrs"]
-build-backend = "setuptools.build_meta"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
 [project]
-name = "JAWS"
+name = "JAWSOME"
+dynamic = ["version"]
+description = "Discover token roles inside AWS environment"
+keywords = ["AWS", "IAM", "bruteforce"]
+readme = "README.md"
 authors = [
-  {name = "pasdoue", email = "pasdoue@protonmail.com"},
+    {name = "pasdoue", email = "pasdoue@protonmail.com"},
 ]
 maintainers = [
-  {name = "pasdoue", email = "pasdoue@protonmail.com"}
+    {name = "pasdoue", email = "pasdoue@protonmail.com"}
 ]
 
-description = "AWS IAM bruteforcer"
-readme = "README.md"
-keywords = ["AWS", "IAM", "bruteforce"]
+requires-python = ">= 3.10"
 dependencies = [
     "R2Log~=1.0.2",
-    "boto3~=1.43.14",
-    "botocore~=1.43.14",
+    "boto3",
+    "botocore",
     "requests~=2.34.2",
     "aiobotocore~=3.7.0",
 ]
-dynamic = ["version"]
-requires-python = ">= 3.10"
 
-[tool.setuptools]
-py-modules = []
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=6.0",
+]
+
+[project.scripts]
+jawsome = "jawsome.main:main"
+
+[project.urls]
+Documentation = "https://github.com/pasdoue/JAWS/blob/main/README.md"
+Repository = "https://github.com/pasdoue/JAWS"
+Issues = "https://github.com/pasdoue/JAWS/issues"
 
 [tool.pytest.ini_options]
 testpaths = [
     "tests",
 ]
+
+[tool.pdm]
+[tool.pdm.version]
+source = "file"
+path = "jawsome/config/ToolConfig.py"
+
+[tool.pdm.build]
+excludes = ["tests"]

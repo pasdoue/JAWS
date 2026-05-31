@@ -15,10 +15,10 @@ from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
 
 from aiobotocore.session import get_session, AioSession
 
-import meta_aws
-from libs.Services import Services, Service, Function, Parameter
-from settings import Config
-from utils import print_elapsed_time, get_unique_keys, find_parent
+from jawsome import meta_aws
+from jawsome.libs.Services import Services, Service, Function, Parameter
+from jawsome.config.ToolConfig import Tool_Config
+from jawsome.utils import print_elapsed_time, get_unique_keys, find_parent
 
 reg_boto_shitty_async = re.compile("|".join(["EC2", "PHI", "SNOMEDCT", "HIT", "MFA", "ID", "ACLS", "ACL", "WhatsApp", "OTel"]))
 reg_boto_services1 = re.compile(r'([A-Z]+)([A-Z][a-z])')
@@ -51,7 +51,7 @@ class EntityTypeEnum(Enum):
 
 class AWS_profile:
 
-    def __init__(self, creds: Dict, metadata: bool = True) -> None:
+    def __init__(self, creds: Dict, metadata: bool = True, output_dir: Path = Path.cwd()) -> None:
         """
             Init object according to input settings
             :param kwargs: creds used
@@ -63,9 +63,17 @@ class AWS_profile:
         self.__creds.pop("profile_name") #create error on client init of aiobotocore if present
         self.arn = ""
         self.entity_type, self.entity_name = None, None
-        self.output_folder_name = ""
+        self.output_dir = Path(output_dir).expanduser() # custom user output dir (from args)
+        self.output_folder_name = "" # will be under output_dir and calculated according to ARN retrieved
         self.services: Services = Services()
         self.metadata = metadata
+
+        if not self.output_dir.exists():
+            try:
+                self.output_dir.mkdir(parents=True, exist_ok=True)
+            except Exception as e:
+                logger.critical(f"Unknwon error while creating output dir. Exiting script. Error details : {str(e)}")
+
 
     def get_region(self):
         return self.__creds["region_name"]
@@ -122,9 +130,9 @@ class AWS_profile:
     def remove_functions_additional_filters(functions: List[Function]) -> List[Function]:
         res = []
         for function in functions:
-            if any(function.name.startswith(safe_mode) for safe_mode in Config.SAFE_MODE) and \
-                    not any(function.name.startswith(billing) for billing in Config.BILLING_HEAVY_PREFIXES) and \
-                    not any(pattern in function.name for pattern in Config.AVOID_PATTERN):
+            if any(function.name.startswith(safe_mode) for safe_mode in Tool_Config.SAFE_MODE) and \
+                    not any(function.name.startswith(billing) for billing in Tool_Config.BILLING_HEAVY_PREFIXES) and \
+                    not any(pattern in function.name for pattern in Tool_Config.AVOID_PATTERN):
                 res.append(function)
         return res
 
@@ -242,7 +250,7 @@ class AWS_profile:
             :param res:
             :return:
         """
-        output_folder = Path(__file__).parent / self.output_folder_name / self.get_region()
+        output_folder = self.output_dir / self.output_folder_name / self.get_region()
         output_file = output_folder / f"{service.name}.json"
 
         if not output_folder.exists():
@@ -413,7 +421,7 @@ class AWS_profile:
         """
         if not iam_results:
             return
-        output_folder = Path(__file__).parent / self.output_folder_name / self.get_region()
+        output_folder = self.output_dir / self.output_folder_name / self.get_region()
         filename = output_folder / f"iam.json"
 
         if not output_folder.exists():
