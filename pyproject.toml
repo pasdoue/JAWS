@@ -3,7 +3,7 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [project]
-name = "JAWSOME"
+name = "jawsome"
 dynamic = ["version"]
 description = "Discover token roles inside AWS environment"
 keywords = ["AWS", "IAM", "bruteforce"]
