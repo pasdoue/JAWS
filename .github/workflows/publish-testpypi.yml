@@ -9,7 +9,7 @@ jobs:
     uses: ./.github/workflows/unit_tests.yml
 
   build:
-    name: Building code source
+    needs: test
     runs-on: ubuntu-latest
     outputs:
       artifact-id: ${{ steps.upload.outputs.artifact-id }}

@@ -1,10 +1,7 @@
 name: Tests
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
+  workflow_call:
 
 jobs:
   test:
@@ -27,8 +24,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install pdm
       - name: Install dependencies
-        run: |
-          pdm update && pdm sync -d -G dev
+        run: pdm sync -d -G dev
       - name: Run tests
-        run: |
-          pdm run pytest -v -s
+        run: pdm run pytest -v -s
