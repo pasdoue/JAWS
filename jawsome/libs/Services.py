@@ -24,7 +24,6 @@ class Function:
         A representation of a function avalaible in an AWS service
         for example : list-policies (inside iam service)
     """
-
     def __init__(self, name: str, parameters: List[Parameter], activated: bool = True):
         self.name = name
         self.activated = activated
@@ -55,7 +54,6 @@ class Service:
     """
         A representation of an AWS services (iam, ssm...)
     """
-
     def __init__(self, name: str, functions: List[Function] = None, activated: bool = True) -> None:
         self.name = name
         self.functions = list() if functions is None else functions

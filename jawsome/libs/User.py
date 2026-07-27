@@ -61,7 +61,7 @@ class User_config:
                 config_section = Prompt.ask(prompt="Choose config to use : ", choices=config.sections(), show_choices=True)
             elif len(config.sections()) == 1:
                 config_section = config.sections()[0]
-                logger.info(f"Chose default region in {config_file_path} which is : {config.get(config_section, "region")}")
+                logger.info(f"Chose default region in {config_file_path} which is : {config.get(config_section, 'region')}")
             else:
                 raise ValueError(f"{Emoji('hamster')} AWS config file detected but no section found : {config_file_path}")
 

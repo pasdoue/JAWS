@@ -13,8 +13,8 @@ class MetaSTS(MetaAWS):
         token_duration = User_Config.SESSION_TOKEN_DURATION
         res = await self.boto_func(DurationSeconds=token_duration)
         AWS_profile.remove_response_metadata(resp=res)
-        if isinstance(res, dict) and "Credentials" in res:
-            pprint_creds = json.dumps(res['Credentials'], default=str, indent=4)
+        if isinstance(res, dict) and "Credentials" in res.keys():
+            pprint_creds = json.dumps(res.get('Credentials'), default=str, indent=4)
             logger.success(f"Session token successfully retrieved : duration {token_duration/60} minutes / {int(token_duration/3600)} hours\n{pprint_creds}")
         return res
 

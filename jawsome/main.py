@@ -72,14 +72,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--config-file', default=User_config.default_config_file_path, help='AWS config file')
     parser.add_argument('--log-file', action="store_true", help='Log inside file the current run')
     parser.add_argument('-o','--output-dir', default=Path.cwd(), help='Custom output directory to store results')
-    parser.add_argument('-t', '--threads', type=int, default=75, help='Number of threads to use')
-    parser.add_argument('--thread-timeout', type=int, default=30, help='Timeout consumed before killing thread')
+    #parser.add_argument('--timeout', type=int, default=30, help='Timeout consumed before killing AWS service call')
     parser.add_argument('-r', '--regions',
                         nargs='*',
                         choices=regions_choices,
                         help='Specify regions to scan')
     parser.add_argument('-b', '--black-list', nargs='*',
-                        default="cloudhsm cloudhsmv2 sms sms-voice.pinpoint",
+                        default=["cloudhsm", "cloudhsmv2", "sms", "sms-voice", "importexport", "inspector"],
                         help='List of services to remove separated by comma. Launch script with -p to see services',
                         metavar='SERVICES')
     parser.add_argument('-w', '--white-list', nargs='*',
@@ -93,6 +92,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--unsafe-mode', action="store_true", help='Perform potentially destructive functions. Disabled by default.')
     parser.add_argument('--no-fancy-bar', action="store_true", help='Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)')
     parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
+    parser.add_argument("-l", "--print-results", action="store_true", help="Parse JSON results for specific profile and print JSON output to CLI")
     parser.add_argument("--version", action="store_true", help="Print tool version")
     parser.parse_known_args()
     return parser.parse_args()
@@ -118,12 +118,17 @@ async def entry_point():
                                           region_name=region)
                          for region in regions_to_scan]
     else:
-        settings_list = [
-            User_config.load(config_file_path=args.config_file, credentials_file_path=args.credentials_file)]
+        settings_list = [User_config.load(config_file_path=args.config_file, credentials_file_path=args.credentials_file)]
 
     for curr_settings in settings_list:
 
         aws_profile = AWS_profile(creds=curr_settings, metadata=args.metadata, output_dir=args.output_dir)
+        if args.print_results:
+            aws_profile.parse_results()
+            print_elapsed_time(start_time=start)
+            start = time.time()
+            continue
+
         await aws_profile.init_class()
 
         iam_res = {}
@@ -174,8 +179,13 @@ async def entry_point():
         if not args.skip_iam:
             aws_profile.write_iam_results_at_the_end(iam_results=iam_res)
 
-        logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.get_region()}")
         print_elapsed_time(start_time=start)
+
+        start = time.time()
+        aws_profile.parse_results()
+        print_elapsed_time(start_time=start)
+
+        logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.get_region()}")
 
 def main():
     try:

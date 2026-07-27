@@ -50,10 +50,10 @@ class Partition_Manager:
             regions = []
             for name, descr in partition.get("regions", {}).items():
                 regions.append(Region(name=name, description=descr.get("description")))
-            self.partitions.append(Partition(shortname=partition["partition"],
-                      name=partition["partitionName"],
-                      dns_suffix=partition["dnsSuffix"],
-                      regex=partition["regionRegex"],
+            self.partitions.append(Partition(shortname=partition.get("partition"),
+                      name=partition.get("partitionName"),
+                      dns_suffix=partition.get("dnsSuffix"),
+                      regex=partition.get("regionRegex"),
                       regions=regions))
         logger.success(f"Finished to parse boto conf")
 
@@ -108,6 +108,6 @@ class Partition_Manager:
         array_intersect = list(set(input_region) & set(all_regions_str))
         if not array_intersect:
             # raise ValueError("No valid regions found")
-            logger.critical(f"Region '{input_region}' is not valid.\nAllowed values: {" ".join(all_regions_str)}")
+            logger.critical(f"Region '{input_region}' is not valid.\nAllowed values: {' '.join(all_regions_str)}")
         return array_intersect
 

@@ -26,7 +26,7 @@ This code is using official **boto3** library and load **dynamically** all servi
 As JAWS already exists on Pypi I had to rename the project to jawsome
 
 ```bash
-pip install jawsome
+pipx install jawsome
 ```
 
 ### Local build
@@ -92,9 +92,9 @@ python3 -m pip install -e .
 ⠀⠀⠀⠀⠀⠀⠈⠙⢷⣾⠃⠀⠀⠀⠈⠾⣦⣙⠪⢷⠄⠀⠀⠀⠀⠀⠀⠀⠈⠻⣭⣟⣹⢦⣀⣀⣟⣹⡟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
-usage: jawsome.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [--log-file] [-o OUTPUT_DIR] [-t THREADS] [--thread-timeout THREAD_TIMEOUT]
+usage: jawsome.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [--log-file] [-o OUTPUT_DIR]
                   [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]                                                              
-                  [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [--no-fancy-bar] [-v] [--version]
+                  [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [--no-fancy-bar] [-v] [-l] [--version]
 
 Bruteforce AWS rights with boto3
 
@@ -108,10 +108,6 @@ options:
   --log-file            Log inside file the current run
   -o, --output-dir OUTPUT_DIR
                         Custom output directory to store results
-  -t, --threads THREADS
-                        Number of threads to use
-  --thread-timeout THREAD_TIMEOUT
-                        Timeout consumed before killing thread
   -r, --regions [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]                                                                     
                         Specify regions to scan
   -b, --black-list [SERVICES ...]
@@ -126,6 +122,7 @@ options:
   --unsafe-mode         Perform potentially destructive functions. Disabled by default.
   --no-fancy-bar        Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
+  -l, --print-results   Parse JSON results for specific profile and print JSON output to CLI
   --version             Print tool version
 ```
 
@@ -250,6 +247,11 @@ Total BF (unsafe mode, not recommended if you don't know what you do)
 python3 jawsome.py --unsafe-mode
 ```
 
+Parse an old scan (JSON generated files) to retrieve only services that drop some information :  
+```bash
+python3 jawsome.py --print-results
+```
+
 ## Done : 
 
 - [X] Handle profile like aws cli and allow user to use any file config
@@ -264,13 +266,15 @@ python3 jawsome.py --unsafe-mode
 - [X] Using fully asyncio now to speed up recon of SDK (4min30 to 10sec). Also total BF is speed up a little (~4min30 instead of 5 to 7min)
 - [X] Adding fancy advancement bar (run for your life before sharky got you!! 🦈) 
 - [X] Modify project structure to push to Pypi
+- [X] Adding CLI recap at the end for every RAW responses
 
 ## TBD : 
 
+- [ ] Implement rate limit for each call to add furtivity
 - [ ] Some parameters of some particular functions are not well retrieved (WTF ><) : lucifer elasticbeanstalk describe_environment_managed_action_history 
 - [ ] Handle multiple args replacement
 - [ ] Try to detect args of functions that are optional (but at least one arg should be passed to run properly). Sounds tricky 
-- [ ] Detect if some results will be erased and trigger a warning if different from previous run
+- [ ] Ability to perform diff between 2 runs with same creds (to see deleted/updated resources) ? (maybe create another tool based on this one to di this ?)
 - [ ] Maybe chunk output json files that are too big (but make it optional)
 
 ## Bonus

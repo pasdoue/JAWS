@@ -85,8 +85,8 @@ class AWS_profile:
         """
         async with self.boto_session.create_client('sts', **self.__creds) as session:
             res = await session.get_caller_identity()
-            logger.info(f"UserId : {res.get("UserId")}")
-            logger.info(f"Account : {res.get("Account")}")
+            logger.info(f"UserId : {res.get('UserId')}")
+            logger.info(f"Account : {res.get('Account')}")
             self.arn = res.get('Arn')
 
         self.entity_type, self.entity_name = self.get_entity_type_and_name(arn=self.arn)
@@ -164,7 +164,8 @@ class AWS_profile:
                             ret = await service_function()
                         if not self._handle_boto_error(ret, check=True):
                             logger.success(f"{service.name}:{function.name} is available")
-                            if not self.metadata: AWS_profile.remove_response_metadata(resp=ret)
+                            if not self.metadata:
+                                AWS_profile.remove_response_metadata(resp=ret)
                             artifacts_only[service.name] = { function.name : ret }
                 except Exception as e:
                     ret = self._handle_boto_error(error=e)
@@ -206,7 +207,8 @@ class AWS_profile:
                                             ret = await service_function(**{param_name: p[param_name]})
                                             if not self._handle_boto_error(ret, check=True):
                                                 logger.success(f"{service.name}:{function.name} is available")
-                                                if not self.metadata: AWS_profile.remove_response_metadata(resp=ret)
+                                                if not self.metadata:
+                                                    AWS_profile.remove_response_metadata(resp=ret)
                                     except Exception as e:
                                         ret = self._handle_boto_error(error=e)
                                     res[service.name][function.name].append({p[param_name]: ret})
@@ -231,7 +233,7 @@ class AWS_profile:
         elif "Missing required parameter" in str_err:
             final_error = "Missing required parameter"
         elif "MissingParameter" in str_err:
-            final_error = f"Multiple optional parameters but required : {str_err.split(":")[-1]}"
+            final_error = f"Multiple optional parameters but required : {str_err.split(':')[-1]}"
         elif "not available in this region" in str_err:
             final_error = "Not available in this region." #TODO : maybe possible to check via boto functions ??
 
@@ -384,7 +386,8 @@ class AWS_profile:
         try:
             everything = await iam_client.get_account_authorization_details()
             logger.success(f"IAM get_account_authorization_details worked!")
-            if no_metadata : AWS_profile.remove_response_metadata(resp=everything)
+            if no_metadata :
+                AWS_profile.remove_response_metadata(resp=everything)
             #TODO: handle when size too big
             #logger.success(json.dumps(everything, indent=4, default=str))
             return everything
@@ -445,7 +448,8 @@ class AWS_profile:
             #TODO : find a role that can do this to test
             #TODO : Handle if response too long ???
             role = await iam_client.get_role(RoleName=role_name)
-            if not metadata : AWS_profile.remove_response_metadata(resp=role)
+            if not metadata :
+                AWS_profile.remove_response_metadata(resp=role)
             logger.success(f"get_role() worked!")
             # logger.success(f"{json.dumps(role, indent=4, default=str)}")
             return role
@@ -458,9 +462,10 @@ class AWS_profile:
         try:
             # TODO : find a role that can do this to test
             role_policies = await iam_client.list_attached_role_policies(RoleName=role_name)
-            if not metadata : AWS_profile.remove_response_metadata(resp=role_policies)
-            for policy in role_policies["AttachedPolicies"]:
-                logger.success(f"Policy Name & ARN [{policy['PolicyName']}] : {policy['PolicyArn']}")
+            if not metadata :
+                AWS_profile.remove_response_metadata(resp=role_policies)
+            for policy in role_policies.get("AttachedPolicies", []):
+                logger.success(f"Policy Name & ARN [{policy.get('PolicyName')}] : {policy.get('PolicyArn')}")
             return role_policies
         except Exception as e:
             logger.error(f"Failed to interrogate IAM list_attached_role_policies() : \n{str(e)}")
@@ -470,11 +475,12 @@ class AWS_profile:
     async def iam_enum_list_role_policies(iam_client, role_name: str, metadata: bool = False) -> Union[str, dict]:
         try:
             role_policies = await iam_client.list_role_policies(RoleName=role_name)
-            if not metadata : AWS_profile.remove_response_metadata(resp=role_policies)
+            if not metadata :
+                AWS_profile.remove_response_metadata(resp=role_policies)
             logger.success(f"IAM list_role_policies worked!")
-            logger.info(f"Role {role_name} has {len(role_policies['PolicyNames'])} inline policies")
+            logger.info(f"Role {role_name} has {len(role_policies.get('PolicyNames',[]))} inline policies")
             # List all policies, if present.
-            for policy in role_policies['PolicyNames']:
+            for policy in role_policies.get('PolicyNames',[]):
                 logger.success(f"Policy : {policy}")
             return role_policies
         except Exception as e:
@@ -488,12 +494,13 @@ class AWS_profile:
     async def iam_enum_get_user(iam_client, metadata: bool = False) -> Union[str, dict]:
         try:
             user = await iam_client.get_user()
-            if not metadata : AWS_profile.remove_response_metadata(resp=user)
+            if not metadata :
+                AWS_profile.remove_response_metadata(resp=user)
             logger.success(f"IAM get_user worked!")
             logger.success(json.dumps(user, indent=4, default=str))
-            if 'UserName' not in user['User']:
-                if user['User']['Arn'].endswith(':root'):
-                    logger.success(f"Found root credentials {Emoji('1st_place_medal')}! \n{user['User']['Arn']}")
+            if user.get('User', '') and 'UserName' not in user.get('User', ''):
+                if user.get('User').get('Arn','').endswith(':root'):
+                    logger.success(f"Found root credentials {Emoji('1st_place_medal')}! \n{user.get('User').get('Arn','')}")
                 else:
                     logger.error("Unexpected iam.get_user() response: %s" % user)
             # else: return user['User']['UserName']
@@ -506,11 +513,12 @@ class AWS_profile:
     async def iam_enum_list_attached_user_policies(iam_client, username: str, metadata: bool = False) -> Union[str, dict]:
         try:
             user_policies = await iam_client.list_attached_user_policies(UserName=username)
-            if not metadata : AWS_profile.remove_response_metadata(resp=user_policies)
+            if not metadata :
+                AWS_profile.remove_response_metadata(resp=user_policies)
             logger.success(f"IAM list_attached_user_policies worked!")
-            logger.info(f"User {username} has {len(user_policies['AttachedPolicies'])} policies")
-            for policy in user_policies['AttachedPolicies']:
-                logger.success(f"Policy Name & ARN : {policy['PolicyName']} [{policy['PolicyArn']}]")
+            logger.info(f"User {username} has {len(user_policies.get('AttachedPolicies',[]))} policies")
+            for policy in user_policies.get('AttachedPolicies',[]):
+                logger.success(f"Policy Name & ARN : {policy.get('PolicyName')} [{policy.get('PolicyArn')}]")
             return user_policies
         except Exception as e:
             logger.error(f"Failed to interrogate IAM list_attached_user_policies() : \n{str(e)}")
@@ -520,11 +528,12 @@ class AWS_profile:
     async def iam_enum_list_user_policies(iam_client, username: str, metadata: bool = False) -> Union[str, dict]:
         try:
             user_policies = await iam_client.list_user_policies(UserName=username)
-            if not metadata : AWS_profile.remove_response_metadata(resp=user_policies)
+            if not metadata :
+                AWS_profile.remove_response_metadata(resp=user_policies)
             logger.success(f"IAM list_user_policies worked!")
-            logger.info(f"User {username} has {len(user_policies['PolicyNames'])} inline policies")
+            logger.info(f"User {username} has {len(user_policies.get('PolicyNames',[]))} inline policies")
             # List all policies, if present.
-            for policy in user_policies['PolicyNames']:
+            for policy in user_policies.get('PolicyNames',[]):
                 logger.success(f"Policy : {policy}")
             return user_policies
         except Exception as e:
@@ -535,9 +544,10 @@ class AWS_profile:
     async def iam_enum_list_groups_for_user(iam_client, username: str, metadata: bool = False) -> Union[str, dict]:
         try:
             user_groups = await iam_client.list_groups_for_user(UserName=username)
-            if not metadata : AWS_profile.remove_response_metadata(resp=user_groups)
+            if not metadata :
+                AWS_profile.remove_response_metadata(resp=user_groups)
             logger.success(f"IAM list_groups_for_user worked!")
-            logger.info(f"User {username} has {len(user_groups['Groups'])} groups associated")
+            logger.info(f"User {username} has {len(user_groups.get('Groups',[]))} groups associated")
             return user_groups
         except Exception as e:
             logger.error(f"Failed to interrogate IAM list_groups_for_user() : \n{str(e)}")
@@ -546,16 +556,51 @@ class AWS_profile:
     @staticmethod
     async def iam_enum_list_group_policies(iam_client, user_groups: dict, metadata: bool = False) -> dict:
         res = {}
-        for group in user_groups['Groups']:
-            group_name = group['GroupName']
+        for group in user_groups.get('Groups',[]):
+            group_name = group.get('GroupName','')
             try:
                 group_policies = await iam_client.list_group_policies(GroupName=group_name)
-                if not metadata : AWS_profile.remove_response_metadata(resp=group_policies)
-                logger.success(f"IAM Group {group_name} has {len(group_policies['PolicyNames'])} inline policies : ")
-                for policy in group_policies['PolicyNames']:
+                if not metadata :
+                    AWS_profile.remove_response_metadata(resp=group_policies)
+                logger.success(f"IAM Group {group_name} has {len(group_policies.get('PolicyNames',[]))} inline policies : ")
+                for policy in group_policies.get('PolicyNames',[]):
                     logger.info(f"---> {policy}")
                 res[group_name] = group_policies
             except Exception as e:
                 logger.error(f"Failed to interrogate IAM list_group_policies() : \n{str(e)}")
                 res[group_name] = str(e)
         return res
+
+    ##########################################
+    ###### Parse all results to CLI
+    ##########################################
+
+    def parse_results(self):
+        """
+            Analyse saved results to show a resume of all retrieved info inside CLI.
+            Avoid to parse all files by hand.
+        """
+        output_folder = self.output_dir / self.output_folder_name / self.get_region()
+        if not output_folder.exists():
+            logger.warning(f"Output folder {output_folder} does not exists. Please perform scan before")
+            return
+
+        for p in output_folder.rglob("*"):
+            curr_service = p.stem
+            service_res = []
+            json_content = {}
+            with p.open('r') as f:
+                json_content = json.loads(f.read())
+
+            all_func = json_content.get(curr_service)
+            if all_func is not None:
+                for func, res in all_func.items():
+                    if isinstance(res, str) and any(res.startswith(x) for x in ["Access Denied","Unknown Exception","Unable to guess","An error occurred", "Not available in this region", "Missing required parameter"]):
+                        continue
+                    else:
+                        service_res.append({func:res})
+
+            if service_res:
+                logger.success(f"Found results for : {curr_service} \n{json.dumps(service_res, indent=4, default=str)}")
+
+
