@@ -3,6 +3,7 @@ import sys
 import argparse
 import time
 from pathlib import Path
+from typing import Union
 
 try:
     import aiobotocore
@@ -25,7 +26,7 @@ try:
 
 except ModuleNotFoundError as e:
     print("Mandatory dependencies are missing:", e)
-    print("Please install them with python3 -m pip install --upgrade -r requirements.txt")
+    print("Please install them with python3 -m pip install --upgrade .")
     exit(1)
 except ImportError as e:
     print("An error occurred while loading the dependencies!\nDetails:")
@@ -91,9 +92,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--list-partitions', action="store_true", help='List partitions (upper level of regions - found by reversing SDK)')
     parser.add_argument('--unsafe-mode', action="store_true", help='Perform potentially destructive functions. Disabled by default.')
     parser.add_argument('--no-fancy-bar', action="store_true", help='Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)')
-    parser.add_argument("-v", "--verbose", action="count", default=0, help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
-    parser.add_argument("-l", "--print-results", action="store_true", help="Parse JSON results for specific profile and print JSON output to CLI")
-    parser.add_argument("--version", action="store_true", help="Print tool version")
+    parser.add_argument('-v', '--verbose', action="count", default=0, help="Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)")
+    parser.add_argument('-l', '--print-results', action="store_true", help="Parse JSON results for specific profile and print JSON output to CLI")
+    parser.add_argument('--dont-print-final-recap', action="store_true", help="Do not print the details of each services and functions that sounds interesting")
+    parser.add_argument('--version', action="store_true", help="Print tool version")
     parser.parse_known_args()
     return parser.parse_args()
 
@@ -181,13 +183,14 @@ async def entry_point():
 
         print_elapsed_time(start_time=start)
 
-        start = time.time()
-        aws_profile.parse_results()
-        print_elapsed_time(start_time=start)
+        if not args.dont_print_final_recap:
+            start = time.time()
+            aws_profile.parse_results()
+            print_elapsed_time(start_time=start)
 
         logger.success(f"{Emoji('partying_face')} All results have been written to this folder : {aws_profile.get_arn_safe_linux(aws_profile.arn)}/{aws_profile.get_region()}")
 
-def main():
+def main() -> Union[int|None]:
     try:
         return asyncio.run(entry_point())
     except (KeyboardInterrupt, asyncio.CancelledError, EOFError):
@@ -195,6 +198,8 @@ def main():
     except SystemExit as e:
         if e.code is not None:
             return int(e.code)
+        else:
+            return 3
     except Exception:
         logger.error("It seems that something unexpected happened ...")
         console.print_exception(show_locals=True, suppress=[asyncio, botocore, boto3, requests, aiobotocore])

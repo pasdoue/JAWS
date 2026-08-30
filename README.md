@@ -93,8 +93,8 @@ python3 -m pip install -e .
 ⠀⠀⠀⠀⠀⠀⠀⠀⠈⣿⠀⠀⣤⠶⠖⠊⠉⠀⠉⠂⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠙⠦⣼⣞⣹⣯⠟⠁⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 
 usage: jawsome.py [-h] [--no-banner] [--credentials-file CREDENTIALS_FILE] [--config-file CONFIG_FILE] [--log-file] [-o OUTPUT_DIR]
-                  [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]                                                              
-                  [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [--no-fancy-bar] [-v] [-l] [--version]
+                  [-r [{af-south-1,ap-east-1,ap-east-2,ap-northeast-1,ap-northeast-2,ap-northeast-3,ap-south-1,ap-south-2,ap-southeast-1,ap-southeast-2,ap-southeast-3,ap-southeast-4,ap-southeast-5,ap-southeast-6,ap-southeast-7,ca-central-1,ca-west-1,eu-central-1,eu-central-2,eu-north-1,eu-south-1,eu-south-2,eu-west-1,eu-west-2,eu-west-3,il-central-1,me-central-1,me-south-1,mx-central-1,sa-east-1,us-east-1,us-east-2,us-west-1,us-west-2,cn-north-1,cn-northwest-1,us-gov-east-1,us-gov-west-1,us-iso-east-1,us-iso-west-1,us-isob-east-1,us-isob-west-1,eu-isoe-west-1,us-isof-east-1,us-isof-south-1,eusc-de-east-1,all} ...]]
+                  [-b [SERVICES ...]] [-w [SERVICES ...]] [--metadata] [-p] [-s] [--list-partitions] [--unsafe-mode] [--no-fancy-bar] [-v] [-l] [--dont-print-final-recap] [--version]
 
 Bruteforce AWS rights with boto3
 
@@ -123,6 +123,8 @@ options:
   --no-fancy-bar        Remove fancy advancement bar with shark and boat (due to calculation it add ~1min runtime for total BF)
   -v, --verbose         Verbosity level (-v for verbose, -vv for advanced, -vvv for debug)
   -l, --print-results   Parse JSON results for specific profile and print JSON output to CLI
+  --dont-print-final-recap
+                        Do not print the details of each services and functions that sounds interesting
   --version             Print tool version
 ```
 
@@ -267,12 +269,12 @@ python3 jawsome.py --print-results
 - [X] Adding fancy advancement bar (run for your life before sharky got you!! 🦈) 
 - [X] Modify project structure to push to Pypi
 - [X] Adding CLI recap at the end for every RAW responses
+- [X] Handle multiple args replacement (finallyyyyyy 🎉)
 
 ## TBD : 
 
+- [ ] Handle DryRun param
 - [ ] Implement rate limit for each call to add furtivity
-- [ ] Some parameters of some particular functions are not well retrieved (WTF ><) : lucifer elasticbeanstalk describe_environment_managed_action_history 
-- [ ] Handle multiple args replacement
 - [ ] Try to detect args of functions that are optional (but at least one arg should be passed to run properly). Sounds tricky 
 - [ ] Ability to perform diff between 2 runs with same creds (to see deleted/updated resources) ? (maybe create another tool based on this one to di this ?)
 - [ ] Maybe chunk output json files that are too big (but make it optional)

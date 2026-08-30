@@ -20,6 +20,9 @@ class User_config:
 
     @classmethod
     def _load_credentials_file(cls, credentials_file_path: Path, region_name: Optional[str]) -> dict:
+        """
+            Method to parse credentials config file (default : ~/.aws/credentials) which is Yaml format
+        """
         profile_to_use = ""
         res = {}
         credentials = ConfigParser()
@@ -52,6 +55,9 @@ class User_config:
 
     @classmethod
     def _load_config_file(cls, config_file_path: Path) -> dict:
+        """
+            Method to parse config file (default : ~/.aws/config) which is Yaml format
+        """
         config = ConfigParser()
 
         if config_file_path.exists():
@@ -74,6 +80,9 @@ class User_config:
     def load(credentials_file_path: Union[Path|str] = default_credentials_file_path,
              config_file_path: Union[Path|str] = default_config_file_path,
              region_name: Optional[str] = None) -> dict:
+        """
+            Handle the loading of credentials and config files
+        """
 
         creds_file_path = Path(credentials_file_path).expanduser() if isinstance(credentials_file_path, str) else credentials_file_path.expanduser()
         conf_file_path = Path(config_file_path).expanduser() if isinstance(config_file_path, str) else config_file_path.expanduser()

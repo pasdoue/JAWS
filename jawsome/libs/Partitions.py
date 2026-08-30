@@ -57,7 +57,7 @@ class Partition_Manager:
                       regions=regions))
         logger.success(f"Finished to parse boto conf")
 
-    def pprint_partitions(self):
+    def pprint_partitions(self) -> None:
         for p in self.partitions:
             logger.info(f"==================================")
             logger.info(f"dnsSuffix : {p.dns_suffix}")

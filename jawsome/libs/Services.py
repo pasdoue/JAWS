@@ -1,6 +1,6 @@
 from re import search as regex_search
 from itertools import zip_longest
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from R2Log import logger, console
 from rich.emoji import Emoji
@@ -121,10 +121,10 @@ class Services:
         self.nb_activated_services = 0
         self.services: List[Service] = list()
 
-    def set_unsafe_mode(self):
+    def set_unsafe_mode(self) -> None:
         self.safe_mode = False
 
-    def add_service(self, service: Service):
+    def add_service(self, service: Service) -> None:
         self.services.append(service)
 
     def get_services(self, active_only: bool = True) -> List[Service]:
@@ -145,7 +145,7 @@ class Services:
     def deactivate_service_function(self, service_name: str,
                                     search_type: str = "str",
                                     pattern: str="",
-                                    is_substring: bool = False):
+                                    is_substring: bool = False) -> None:
         """
             Function to deactivate specific(s) function(s) by pattern (can be strict / light comparison or regex)
             :param service_name: name of service to scan
@@ -171,20 +171,17 @@ class Services:
                             function.activated = False
                             self.nb_activated_services -= 1
 
-    def calculate_white_and_black_list(self, white_list: List[str], black_list: List[str]):
+    def calculate_white_and_black_list(self, white_list: Union[str|List[str]], black_list: Union[str|List[str]]) -> None:
         """
             Return list of AWS services to bruteforce first including white list if exists and then always exclude black list.
             :param white_list: list of services to scan
             :param black_list: list of services to avoid
         """
-        self.__blacklist = black_list
-        self.__whitelist = white_list
-        self.nb_services = len(self.services)
+        self.__blacklist = black_list.strip().split(",") if isinstance(black_list, str) else black_list
+        self.__whitelist = white_list.strip().split(",") if isinstance(white_list, str) else white_list
 
-        if isinstance(self.__blacklist, str):
-            self.__blacklist = self.__blacklist.strip().split(",")
-        if isinstance(self.__whitelist, str):
-            self.__whitelist = self.__whitelist.strip().split(",")
+        #self.__whitelist = self.__whitelist.strip().split(",") if isinstance(self.__whitelist, str) else white_list
+        self.nb_services = len(self.services)
 
         for service in self.services:
             if self.__whitelist:
@@ -195,7 +192,7 @@ class Services:
             if service.activated:
                 self.nb_activated_services += 1
 
-    def calculate_safe_mode(self):
+    def calculate_safe_mode(self) -> None:
         """
             Deactivate some functions if we are in safe mode.
         """
@@ -204,7 +201,7 @@ class Services:
         for service in self.services:
             if service.activated:
                 for function in service.functions:
-                    if any(function.name.startswith(safe_mode) for safe_mode in Tool_Config.SAFE_MODE):
+                    if not any(function.name.startswith(safe_mode) for safe_mode in Tool_Config.SAFE_MODE):
                        function.activated = True
                     else:
                         function.activated = False

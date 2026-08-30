@@ -12,19 +12,20 @@ from typing import Dict, Union, Any, Tuple, Optional, List
 from R2Log import logger, console
 from rich.emoji import Emoji
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn
+from itertools import product, combinations
 
 from aiobotocore.session import get_session, AioSession
 
 from jawsome import meta_aws
 from jawsome.libs.Services import Services, Service, Function, Parameter
 from jawsome.config.ToolConfig import Tool_Config
-from jawsome.utils import print_elapsed_time, get_unique_keys, find_parent
+from jawsome.utils import print_elapsed_time, get_json_string_keys, find_json_key_paths, get_json_by_path
 
 reg_boto_shitty_async = re.compile("|".join(["EC2", "PHI", "SNOMEDCT", "HIT", "MFA", "ID", "ACLS", "ACL", "WhatsApp", "OTel"]))
 reg_boto_services1 = re.compile(r'([A-Z]+)([A-Z][a-z])')
 reg_boto_services2 = re.compile(r'([a-z0-9])([A-Z])')
 
-async def search_adequate_module(module: str, method: str, arn: str, boto_func: Any) -> Optional[Any]:
+async def search_custom_module(module: str, method: str, arn: str, boto_func: Any) -> Optional[Any]:
     """
     Search for a specific method within a module within the meta_aws package.
 
@@ -99,6 +100,9 @@ class AWS_profile:
 
     @staticmethod
     def get_entity_type_and_name(arn: str) -> Tuple[EntityTypeEnum, str]:
+        """
+            Parse ARN to retrieve type (user or role) and name of current entity.
+        """
         if "assumed-role" in arn:
             entity_type = EntityTypeEnum.role
             entity_name = arn.split("/")[-2]
@@ -128,9 +132,15 @@ class AWS_profile:
 
     @staticmethod
     def remove_functions_additional_filters(functions: List[Function]) -> List[Function]:
+        """
+            Avoid to call some specific functions :
+            - safe_mode
+            - billing
+            - avoid_pattern
+        """
         res = []
         for function in functions:
-            if any(function.name.startswith(safe_mode) for safe_mode in Tool_Config.SAFE_MODE) and \
+            if not any(function.name.startswith(safe_mode) for safe_mode in Tool_Config.SAFE_MODE) and \
                     not any(function.name.startswith(billing) for billing in Tool_Config.BILLING_HEAVY_PREFIXES) and \
                     not any(pattern in function.name for pattern in Tool_Config.AVOID_PATTERN):
                 res.append(function)
@@ -142,7 +152,8 @@ class AWS_profile:
         """
         res = dict()
         res[service.name] = {}
-        artifacts_only = {}
+        artifacts_only = dict()
+        artifacts_only[service.name] = {}
 
         func_with_no_params = service.get_functions(active_only=True, no_params_required=True)
         func_with_no_params = AWS_profile.remove_functions_additional_filters(func_with_no_params)
@@ -150,13 +161,17 @@ class AWS_profile:
         progress.update(progress_id, total=len(func_with_no_params))
         #start collecting possible artifacts by interrogating endpoints without params needed
         for function in func_with_no_params:
-            service_function = getattr(session_obj, function.name)
+            try:
+                service_function = getattr(session_obj, function.name)
+            except AttributeError:
+                progress.update(progress_id, advance=1)
+                continue
             # check if the function is available in the current zone
             if service_function is None:
                 ret = "unavailable"
             else:
                 try:
-                    ret = await search_adequate_module(module=service.name, method=function.name, arn=self.arn, boto_func=service_function)
+                    ret = await search_custom_module(module=service.name, method=function.name, arn=self.arn, boto_func=service_function)
                     if ret is None:
                         if function.hash_ownerid_param():
                             ret = await service_function(OwnerIds=["self"])
@@ -166,7 +181,10 @@ class AWS_profile:
                             logger.success(f"{service.name}:{function.name} is available")
                             if not self.metadata:
                                 AWS_profile.remove_response_metadata(resp=ret)
-                            artifacts_only[service.name] = { function.name : ret }
+                            # verify return is not empty list
+                            resp_not_empty = self._verify_response_not_empty_for_artifacts(resp=ret)
+                            if resp_not_empty:
+                                artifacts_only[service.name][function.name] = resp_not_empty
                 except Exception as e:
                     ret = self._handle_boto_error(error=e)
                 if ret is None:
@@ -174,49 +192,52 @@ class AWS_profile:
             res[service.name][function.name] = ret
             progress.update(progress_id, advance=1)
 
-        unique_keys_artifacts = get_unique_keys(obj=artifacts_only)
-        if artifacts_only == {}:
+        # unique_keys_artifacts = get_unique_keys(obj=artifacts_only)
+        if artifacts_only[service.name] == {}:
             #no items found so not possible to inject args ???
             logger.debug(f"No artifacts retrieved for {service.name}")
         else:
-            func_with_params = [f for f in service.functions if f.activated and not f.has_no_required_params()]
-            func_with_params = AWS_profile.remove_functions_additional_filters(func_with_params)
-            progress.update(progress_id, total=len(func_with_params))
+            logger.debug(f"Artifacts content : \n{json.dumps(artifacts_only[service.name], default=str, indent=4)}")
+            logger.debug(f"Testing artifacts for {service.name}")
+            funcs = [f for f in service.functions if f.name not in artifacts_only[service.name].keys()] # test loot on every functions except those already collected as artifcats
+            funcs = AWS_profile.remove_functions_additional_filters(funcs)
+            progress.update(progress_id, total=len(funcs))
             # iterate a second round only for functions with params so we can try to inject some previous artifacts
-            for function in func_with_params:
-                service_function = getattr(session_obj, function.name)
+            for function in funcs:
+                try:
+                    service_function = getattr(session_obj, function.name)
+                except AttributeError:
+                    progress.update(progress_id, advance=1)
+                    continue
                 # check if the function is available in the current zone
                 if service_function is None:
                     res[service.name][function.name] = "unavailable"
                 else:
-                    params_names = function.get_params(required_params_only=True)
-                    if [uniq_key in params_names for uniq_key in unique_keys_artifacts].count(True) == len(params_names):
-                        logger.success(f"All parameters are injectable for {service.name}:{function.name}({','.join(params_names)})")
-                        res[service.name][function.name] = []
-                        if len(params_names) == 1:
-                            # simple case to handle has we have only one possibility
-                            param_name = params_names[0]
-                            possibilities = find_parent(obj=artifacts_only, target_key=param_name)
-                            if isinstance(possibilities, dict):
-                                logger.info(f"Test injecting : {len(list(possibilities.values())[0])} possibilities")
-                                for p in list(possibilities.values())[0]:
-                                    try:
-                                        ret = await search_adequate_module(module=service.name, method=function.name, arn=self.arn,
-                                                                 boto_func=service_function)
-                                        if ret is None:
-                                            ret = await service_function(**{param_name: p[param_name]})
-                                            if not self._handle_boto_error(ret, check=True):
-                                                logger.success(f"{service.name}:{function.name} is available")
-                                                if not self.metadata:
-                                                    AWS_profile.remove_response_metadata(resp=ret)
-                                    except Exception as e:
-                                        ret = self._handle_boto_error(error=e)
-                                    res[service.name][function.name].append({p[param_name]: ret})
-                        else:
-                            logger.warning(f"Not implemented for multiple args...")
-                            res[service.name][function.name] = f"Not implemented for multiple args..."
-                    else:
-                        res[service.name][function.name] = f"Unable to guess all required params. Avoiding call."
+                    #TODO : Handle DryRun param (example : web01 ec2 => describe_snapshots) 'DryRun'
+                    params_names = function.get_params() # test loot for every params (because sometimes function need Union[params] to work but does not tag them as mandatory)
+                    kwargs = self.create_kwargs(params_names=params_names, artifacts=artifacts_only)
+                    if kwargs:
+                        logger.info(f"Will try to inject {str(len(kwargs))} params inside {service.name}:{function.name}")
+                        logger.debug(f"Generated kwargs :\n{json.dumps(kwargs, default=str, indent=4)}")
+                        for kwarg in kwargs:
+                            try:
+                                #TODO : upgrade this to be able to pass params to rewrited functions
+                                ret = await search_custom_module(module=service.name, method=function.name, arn=self.arn, boto_func=service_function)
+                                if ret is None:
+                                    ret = await service_function(**kwarg)
+                                    if not self._handle_boto_error(ret, check=True):
+                                        logger.success(f"Injected params {service.name}:{function.name}({json.dumps(kwarg, default=str)}) worked")
+                                        if not self.metadata:
+                                            AWS_profile.remove_response_metadata(resp=ret)
+                            except Exception as e:
+                                ret = self._handle_boto_error(error=e)
+                            if not res[service.name].get(function.name):
+                                res[service.name][function.name] = {}
+                            if isinstance(res[service.name][function.name], dict):
+                                res[service.name][function.name][json.dumps(kwarg, default=str)] = ret
+                            elif isinstance(res[service.name][function.name], str):
+                                prev_call = res[service.name][function.name]
+                                res[service.name][function.name] = {"first_call" : prev_call, json.dumps(kwarg, default=str) : ret}
                 progress.update(progress_id, advance=1)
 
         self.write_rights_to_file(service=service, res=res)
@@ -224,17 +245,84 @@ class AWS_profile:
         return res
 
     @staticmethod
+    def create_kwargs(params_names: List[str], artifacts: dict) -> List[dict]:
+        """
+            Create all possibilities for given loot params. For example :
+            params_names=['param1','param2',...]
+            artifacts=[ {'junk':'junk','param1':'toto','junk1':'junk1',...},
+                {'junka':'junka','param1':'tata','junka1':'junka1',...},
+                {'junkb':'junkb','param2':'fefe','junkb1':'junkb1',...},...
+            ]
+            Solution = [
+                {'param1':'toto'},
+                {'param1':'tata'},
+                {'param2':'fefe'},
+                {'param1':'toto','param2':'fefe'},
+                {'param1':'tata','param2':'fefe'}
+            ]
+        """
+        result = []
+        # Find all dictionaries containing parameters of interest
+        param_values = { param: [] for param in params_names}
+
+        artifacts_keys = get_json_string_keys(data=artifacts)
+        if not artifacts_keys:
+            return result
+
+        for param in params_names:
+            if param in Tool_Config.AVOID_SERVICE_LOOT or param in Tool_Config.AVOID_PATTERN:
+                continue
+
+            if param in artifacts_keys:
+                k_path = find_json_key_paths(data=artifacts, target_key=param)
+                param_values[param].extend( [get_json_by_path(data=artifacts, path=p) for p in k_path] )
+            elif param+"s" in artifacts_keys:
+                k_path = find_json_key_paths(data=artifacts, target_key=param+"s")
+                for p in k_path:
+                    values = get_json_by_path(data=artifacts, path=p)
+                    param_values[param].extend(values)
+
+        # Generate combinations containing 1, 2, ... N parameters
+        for size in range(1, len(params_names) + 1):
+            for selected_params in combinations(params_names, size):
+                values = [ param_values[param] for param in selected_params ]
+                for combination in product(*values):
+                    res = dict(zip(selected_params, combination))
+                    # before push it as a solution, verify it does not already exists
+                    if not res in result:
+                        result.append(res)
+        return result
+
+    @staticmethod
+    def _verify_response_not_empty_for_artifacts(resp: Union[str | dict]) -> dict:
+        """
+            Usefull to avoid empty results in loot artifacts.
+            Because sometimes response can be empty list,
+            so avoid collecting it in artifacts to save some performance when trying to inject them in function after.
+        """
+        result = {}
+        if isinstance(resp, dict):
+            for k,v in resp.items():
+                if v:
+                    result[k] = v
+        return result
+
+    @staticmethod
     def _handle_boto_error(error: Union[Exception|str], check=False) -> Union[str|bool] :
+        """
+            Analyse boto response to determine if it's an error or not.
+            We replace boto resp message to save some space on disk (can be large otherwise).
+        """
         str_err = str(error)
         final_error = ""
-        if any(x in str_err for x in ["UnauthorizedOperation", "AccessDenied", "ForbiddenException"]):
+        if any(x in str_err for x in Tool_Config.HANDLE_BOTO_ERROR_ACCESS_DENIED):
             final_error = f"Access Denied."
         #should not happened but stay there even if normally handled
         elif "Missing required parameter" in str_err:
-            final_error = "Missing required parameter"
+            final_error = str_err
         elif "MissingParameter" in str_err:
             final_error = f"Multiple optional parameters but required : {str_err.split(':')[-1]}"
-        elif "not available in this region" in str_err:
+        elif "not available in this region" in str_err.lower():
             final_error = "Not available in this region." #TODO : maybe possible to check via boto functions ??
 
         if check:
@@ -248,9 +336,6 @@ class AWS_profile:
     def write_rights_to_file(self, service: Service, res: dict) -> None:
         """
             Write to output file the result of batch
-            :param service:
-            :param res:
-            :return:
         """
         output_folder = self.output_dir / self.output_folder_name / self.get_region()
         output_file = output_folder / f"{service.name}.json"
@@ -330,9 +415,7 @@ class AWS_profile:
                 if s_obj.operation_model(function).input_shape is not None:
                     str_params = list(s_obj.operation_model(function).input_shape.members.keys())
                     for p in str_params:
-                        is_required = False
-                        if p in s_obj.operation_model(function).input_shape.required_members:
-                            is_required = True
+                        is_required = True if p in s_obj.operation_model(function).input_shape.required_members else False
                         params.append(Parameter(name=p, required=is_required))
                 curr_service.add_function(function=Function(name=boto_functions_lower[i], activated=True, parameters=params))
             except Exception as e:
@@ -436,7 +519,7 @@ class AWS_profile:
             with filename.open('r') as f:
                 file_content = json.loads(f.read())
             for key in iam_results.keys():
-                file_content["iam"][key] = iam_results[key]
+                file_content[key] = iam_results[key]
             filename.write_text(json.dumps(file_content, indent=4, sort_keys=True, default=str))
 
     ##########################################
@@ -595,7 +678,7 @@ class AWS_profile:
             all_func = json_content.get(curr_service)
             if all_func is not None:
                 for func, res in all_func.items():
-                    if isinstance(res, str) and any(res.startswith(x) for x in ["Access Denied","Unknown Exception","Unable to guess","An error occurred", "Not available in this region", "Missing required parameter"]):
+                    if isinstance(res, str) and any(res.startswith(x) for x in Tool_Config.PARSING_FINAL_RESULT_AVOID_LIST):
                         continue
                     else:
                         service_res.append({func:res})

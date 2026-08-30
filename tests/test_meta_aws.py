@@ -2,7 +2,7 @@ import unittest
 
 from jawsome.meta_aws.meta_aws import MetaAWS
 
-class TestConfig(unittest.TestCase):
+class TestMetaAWS(unittest.TestCase):
 
     def test_is_role_arn(self):
         res = []

@@ -17,11 +17,12 @@ maintainers = [
 
 requires-python = ">= 3.10"
 dependencies = [
-    "R2Log~=1.0.2",
+    "R2Log",
+    "pyyaml",
     "boto3",
     "botocore",
-    "requests~=2.34.2",
-    "aiobotocore~=3.7.0",
+    "requests",
+    "aiobotocore",
 ]
 
 [dependency-groups]
